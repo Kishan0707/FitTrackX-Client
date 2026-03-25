@@ -5,7 +5,4 @@ const redisClient = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-redisClient.on("connect", () => console.log("✅ Redis Connected"));
-redisClient.on("error", (err) => console.log("❌ Redis Error", err));
-
 module.exports = redisClient;
