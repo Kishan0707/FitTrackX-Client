@@ -1,29 +1,11 @@
-const { createClient } = require("redis");
+const { Redis } = require("@upstash/redis");
 
 const redisClient = createClient({
-  url: process.env.REDIS_URL,
-  socket: {
-    reconnectStrategy: (retries) => {
-      if (retries > 5) {
-        console.log("❌ Redis reconnect stopped");
-        return new Error("Retry limit reached");
-      }
-      return Math.min(retries * 200, 2000);
-    },
-  },
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
 redisClient.on("connect", () => console.log("✅ Redis Connected"));
 redisClient.on("error", (err) => console.log("❌ Redis Error", err));
-
-const connectRedis = async () => {
-  try {
-    if (!redisClient.isOpen) {
-      await redisClient.connect();
-    }
-  } catch (err) {
-    console.log("❌ Redis not Connected");
-  }
-};
 
 module.exports = { redisClient, connectRedis };

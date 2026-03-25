@@ -4,10 +4,8 @@ const app = require("./app");
 const connectDB = require("./config/db");
 const http = require("http");
 const { initializeSocket } = require("./config/socket");
-const { connectRedis } = require("./config/redis");
 connectDB();
 
-connectRedis();
 const server = http.createServer(app);
 initializeSocket(server);
 server.listen(5000, () => {

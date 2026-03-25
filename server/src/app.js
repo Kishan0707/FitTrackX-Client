@@ -1,3 +1,4 @@
+//app.js
 const express = require("express");
 const cors = require("cors");
 const cookie = require("cookie-parser");
@@ -32,6 +33,7 @@ const apiLimiter = require("./middleware/rateLimit.middleware");
 const paymentRoutes = require("./routes/payment.route");
 const logger = require("../src/config/logger");
 const errorHandler = require("./middleware/error.middleware");
+const redis = require("./config/redis");
 
 app.use(
   cors({
@@ -87,6 +89,13 @@ app.use("/api/admin", coachActivityRoutes);
 app.get("/", (req, res) => {
   res.send("FitTrack X API Running 🚀");
 });
-
+app.get("/set", async (req, res) => {
+  await redis.set("test", "hello", { ex: 60 }); // 60 sec expiry
+  res.send("Data set in Redis");
+});
+app.get("/get", async (req, res) => {
+  const data = await redis.get("test");
+  res.send(data);
+});
 app.use(errorHandler);
 module.exports = app;
