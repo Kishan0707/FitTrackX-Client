@@ -34,11 +34,20 @@ const paymentRoutes = require("./routes/payment.route");
 const logger = require("../src/config/logger");
 const errorHandler = require("./middleware/error.middleware");
 const redis = require("./config/redis");
-
+const allowedOrigins = [
+  "http://localhost:5173", // local
+  "https://fit-track-x-clients.vercel.app", // production
+];
 app.use(
   cors({
-    origin: "*",
-    credentials: false,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
     optionSuccessStatus: 200,
     methods: ["GET", "POST", "PUT", "DELETE"],
     preflightContinue: false,
