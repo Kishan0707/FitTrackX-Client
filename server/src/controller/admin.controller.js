@@ -133,6 +133,33 @@ exports.allUsers = async (req, res) => {
   }
 };
 
+exports.getUserModeration = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select(
+      "name email role status moderation",
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 exports.updateUserModeration = async (req, res) => {
   try {
     const normalizedAction =

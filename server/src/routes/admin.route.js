@@ -14,6 +14,20 @@ router.get(
   authorizeRoles("admin"),
   adminController.allUsers,
 );
+router.get(
+  "/users/:id/moderation",
+  protect,
+  adminOnly,
+  authorizeRoles("admin"),
+  adminController.getUserModeration,
+);
+router.put(
+  "/users/:id/moderation",
+  protect,
+  adminOnly,
+  authorizeRoles("admin"),
+  adminController.updateUserModeration,
+);
 router.patch(
   "/users/:id/moderation",
   protect,

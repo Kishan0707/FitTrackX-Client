@@ -49,7 +49,7 @@ app.use(
     },
     credentials: true,
     optionSuccessStatus: 200,
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     preflightContinue: false,
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
