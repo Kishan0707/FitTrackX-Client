@@ -4,11 +4,61 @@ const Diet = require("../models/diet.model");
 const redisClient = require("../config/redis");
 const bcrypt = require("bcryptjs");
 const coachActivityController = require("./coachActivity.controller");
+const AdminAuditLog = require("../models/adminAuditLog.model");
 
 const buildCoachClientFilter = (coachId) => ({
   role: "user",
   $or: [{ assignedCoach: coachId }, { coachId }],
 });
+
+const VALID_MODERATION_ACTIONS = ["activate", "suspend", "ban"];
+
+const moderationStatusMap = {
+  activate: "active",
+  suspend: "suspended",
+  ban: "banned",
+};
+
+const moderationActionLabelMap = {
+  activate: "activated",
+  suspend: "suspended",
+  ban: "banned",
+};
+
+const getClientIp = (req) => {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim().length > 0) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.ip || req.connection?.remoteAddress || null;
+};
+
+const writeAdminAuditLog = async (
+  req,
+  { action, targetType = "system", targetId = null, description, metadata = {} },
+) => {
+  try {
+    if (!req?.user?._id || !action || !description) {
+      return;
+    }
+
+    await AdminAuditLog.create({
+      adminId: req.user._id,
+      action,
+      targetType,
+      targetId,
+      description,
+      metadata,
+      ipAddress: getClientIp(req),
+      userAgent:
+        typeof req.headers["user-agent"] === "string"
+          ? req.headers["user-agent"]
+          : null,
+    });
+  } catch (error) {
+    console.error("Admin audit log write error:", error.message);
+  }
+};
 
 exports.dashBoardStats = async (req, res) => {
   try {
@@ -83,16 +133,221 @@ exports.allUsers = async (req, res) => {
   }
 };
 
-exports.deleteUsers = async (req, res) => {
+exports.updateUserModeration = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const normalizedAction =
+      typeof req.body.action === "string"
+        ? req.body.action.trim().toLowerCase()
+        : "";
+    const normalizedReason =
+      typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+
+    if (!VALID_MODERATION_ACTIONS.includes(normalizedAction)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action. Use one of: activate, suspend, ban",
+      });
+    }
+
+    if (
+      (normalizedAction === "suspend" || normalizedAction === "ban") &&
+      !normalizedReason
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Reason is required for suspend or ban action",
+      });
+    }
+
+    const user = await User.findById(req.params.id).select("-password");
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
-        error: err.message,
       });
     }
+
+    if (String(user._id) === String(req.user._id)) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot moderate your own account",
+      });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Admin accounts cannot be moderated from this route",
+      });
+    }
+
+    const nextStatus = moderationStatusMap[normalizedAction];
+    const actionLabel = moderationActionLabelMap[normalizedAction];
+    const previousStatus = user.status;
+
+    user.status = nextStatus;
+    user.moderation = {
+      action: normalizedAction === "activate" ? "none" : nextStatus,
+      reason: normalizedAction === "activate" ? null : normalizedReason,
+      updatedBy: req.user._id,
+      updatedAt: new Date(),
+    };
+
+    await user.save();
+
+    await writeAdminAuditLog(req, {
+      action: `user_${actionLabel}`,
+      targetType: user.role === "coach" ? "coach" : "user",
+      targetId: user._id,
+      description: `Admin ${actionLabel} account ${user.email}`,
+      metadata: {
+        previousStatus,
+        newStatus: nextStatus,
+        reason: normalizedAction === "activate" ? null : normalizedReason,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `User ${actionLabel} successfully`,
+      data: user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
+exports.getAdminAuditLogs = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      action,
+      targetType,
+      adminId,
+      from,
+      to,
+    } = req.query;
+
+    const parsedPage = Number.parseInt(page, 10);
+    const parsedLimit = Number.parseInt(limit, 10);
+    const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const perPage =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 100)
+        : 20;
+
+    const query = {};
+
+    if (action) {
+      query.action = String(action).trim();
+    }
+    if (targetType) {
+      query.targetType = String(targetType).trim();
+    }
+    if (adminId) {
+      query.adminId = adminId;
+    }
+
+    if (from || to) {
+      query.createdAt = {};
+
+      if (from) {
+        const fromDate = new Date(from);
+        if (Number.isNaN(fromDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid 'from' date",
+          });
+        }
+        query.createdAt.$gte = fromDate;
+      }
+
+      if (to) {
+        const toDate = new Date(to);
+        if (Number.isNaN(toDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid 'to' date",
+          });
+        }
+        query.createdAt.$lte = toDate;
+      }
+    }
+
+    const skip = (currentPage - 1) * perPage;
+
+    const [logs, total] = await Promise.all([
+      AdminAuditLog.find(query)
+        .populate("adminId", "name email role")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(perPage)
+        .lean(),
+      AdminAuditLog.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: logs.length,
+      pagination: {
+        page: currentPage,
+        limit: perPage,
+        total,
+        totalPages: Math.ceil(total / perPage),
+      },
+      data: logs,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
+exports.deleteUsers = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select(
+      "name email role status moderation",
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (String(user._id) === String(req.user._id)) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot delete your own account",
+      });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    await writeAdminAuditLog(req, {
+      action: "user_deleted",
+      targetType: user.role === "coach" ? "coach" : "user",
+      targetId: user._id,
+      description: `Admin deleted ${user.role} account ${user.email}`,
+      metadata: {
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        moderation: user.moderation || null,
+      },
+    });
+
     res.status(200).json({
       success: true,
       message: "User deleted successfully",

@@ -55,8 +55,28 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "inactive", "completed"],
+      enum: ["active", "inactive", "completed", "suspended", "banned"],
       default: "active",
+    },
+    moderation: {
+      action: {
+        type: String,
+        enum: ["none", "suspended", "banned"],
+        default: "none",
+      },
+      reason: {
+        type: String,
+        default: null,
+      },
+      updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      updatedAt: {
+        type: Date,
+        default: null,
+      },
     },
     clients: [
       // coach ke clients ka reference

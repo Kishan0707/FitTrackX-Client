@@ -14,7 +14,21 @@ router.get(
   authorizeRoles("admin"),
   adminController.allUsers,
 );
+router.patch(
+  "/users/:id/moderation",
+  protect,
+  adminOnly,
+  authorizeRoles("admin"),
+  adminController.updateUserModeration,
+);
 router.delete("/users/:id", protect, adminOnly, adminController.deleteUsers);
+router.get(
+  "/audit-logs",
+  protect,
+  adminOnly,
+  authorizeRoles("admin"),
+  adminController.getAdminAuditLogs,
+);
 router.get("/workouts", protect, adminOnly, adminController.getAllWorkout);
 router.delete(
   "/workouts/:id",

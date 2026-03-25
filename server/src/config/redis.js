@@ -1,12 +1,34 @@
-const { Redis } = require("@upstash/redis");
+const redis = require("../config/redis");
 
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_URL;
-const redisToken =
-  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_TOKEN;
+const redisCache = (prefix) => {
+  return async (req, res, next) => {
+    try {
+      const key = `${prefix}:${req.user.id}`;
 
-const redisClient = new Redis({
-  url: redisUrl,
-  token: redisToken,
-});
+      const cachedData = await redis.get(key);
 
-module.exports = redisClient;
+      if (cachedData) {
+        return res.status(200).json({
+          success: true,
+          source: "redis-cache",
+          data: cachedData, // ❗ Upstash me parse ki zarurat nahi hoti
+        });
+      }
+
+      // 🔥 intercept response to save later
+      res.sendResponse = res.json;
+
+      res.json = async (body) => {
+        await redis.set(key, body.data, { ex: 60 }); // 60 sec cache
+        res.sendResponse(body);
+      };
+
+      next();
+    } catch (err) {
+      console.error("Redis error:", err);
+      next();
+    }
+  };
+};
+
+module.exports = redisCache;
