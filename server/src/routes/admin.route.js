@@ -102,7 +102,12 @@ router.get(
   adminOnly,
   adminController.getTopPerformers,
 );
-router.get("/system-health", protect, adminOnly, adminController.getSystemHealth);
+router.get(
+  "/system-health",
+  protect,
+  adminOnly,
+  adminController.getSystemHealth,
+);
 
 // Coach Management Routes
 router.get("/coaches", protect, adminOnly, adminController.getAllCoaches);
@@ -110,8 +115,23 @@ router.post("/coaches", protect, adminOnly, adminController.createCoach);
 router.put("/coaches/:id", protect, adminOnly, adminController.updateCoach);
 router.delete("/coaches/:id", protect, adminOnly, adminController.deleteCoach);
 router.get("/coaches/:id", protect, adminOnly, adminController.getCoachDetails);
-router.get("/coaches/:id/clients", protect, adminOnly, adminController.getCoachClients);
-router.post("/coaches/:id/assign-client", protect, adminOnly, adminController.assignClientToCoach);
-router.post("/coaches/:id/unassign-client", protect, adminOnly, adminController.unassignClientFromCoach);
+router.get(
+  "/coaches/:id/clients",
+  protect,
+  adminOnly,
+  adminController.getCoachClients,
+);
+router.post(
+  "/coaches/:id/assign-client",
+  protect,
+  adminOnly,
+  adminController.assignClientToCoach,
+);
+router.post(
+  "/coaches/:id/unassign-client",
+  protect,
+  adminOnly,
+  adminController.unassignClientFromCoach,
+);
 
 module.exports = router;
