@@ -25,8 +25,7 @@ const progressEntrySchema = new mongoose.Schema({
 const achievementSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, "Achievement title is required"],
-    trim: true,
+    required: true,
   },
   description: String,
   date: {
@@ -89,7 +88,7 @@ const clientProgressSchema = new mongoose.Schema(
 
 // Calculate progress percentage
 clientProgressSchema.methods.calculateProgress = function () {
-  const targetWeight = Number(this.goals?.targetWeight);
+  const targetWeight = Number(this.goals?.targetWeight); //
   const startWeight = Number(this.initialStats?.weight);
 
   if (!Number.isFinite(targetWeight) || !Number.isFinite(startWeight)) {

@@ -833,6 +833,7 @@ exports.createCoach = async (req, res) => {
     });
   }
 };
+// update coach
 
 exports.updateCoach = async (req, res) => {
   try {
@@ -1039,7 +1040,7 @@ exports.assignClientToCoach = async (req, res) => {
 
     await User.updateOne(
       { _id: coachId, role: "coach" },
-      { $addToSet: { clients: client._id } },
+      {   ToSet: { clients: client._id } },
     );
 
     // Log activity
