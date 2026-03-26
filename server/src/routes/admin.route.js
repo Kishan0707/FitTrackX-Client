@@ -14,6 +14,13 @@ router.get(
   authorizeRoles("admin"),
   adminController.allUsers,
 );
+router.post(
+  "/users/bulk-action",
+  protect,
+  adminOnly,
+  authorizeRoles("admin"),
+  adminController.bulkUserAction,
+);
 router.get(
   "/users/:id/moderation",
   protect,

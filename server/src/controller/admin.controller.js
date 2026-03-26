@@ -256,6 +256,7 @@ exports.getAdminAuditLogs = async (req, res) => {
       limit = 20,
       action,
       targetType,
+      targetId,
       adminId,
       from,
       to,
@@ -276,6 +277,9 @@ exports.getAdminAuditLogs = async (req, res) => {
     }
     if (targetType) {
       query.targetType = String(targetType).trim();
+    }
+    if (targetId) {
+      query.targetId = targetId;
     }
     if (adminId) {
       query.adminId = adminId;
@@ -329,6 +333,151 @@ exports.getAdminAuditLogs = async (req, res) => {
         totalPages: Math.ceil(total / perPage),
       },
       data: logs,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
+exports.bulkUserAction = async (req, res) => {
+  try {
+    const normalizedAction =
+      typeof req.body.action === "string"
+        ? req.body.action.trim().toLowerCase()
+        : "";
+    const normalizedReason =
+      typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+    const requestedUserIds = Array.isArray(req.body.userIds) ? req.body.userIds : [];
+    const uniqueUserIds = [...new Set(requestedUserIds.map(String))];
+
+    if (!VALID_MODERATION_ACTIONS.includes(normalizedAction)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action. Use one of: activate, suspend, ban",
+      });
+    }
+
+    if (
+      (normalizedAction === "suspend" || normalizedAction === "ban") &&
+      !normalizedReason
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Reason is required for suspend or ban action",
+      });
+    }
+
+    if (uniqueUserIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least one user id",
+      });
+    }
+
+    const validObjectIds = uniqueUserIds.filter((id) =>
+      require("mongoose").Types.ObjectId.isValid(id),
+    );
+
+    if (validObjectIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid user ids provided",
+      });
+    }
+
+    const users = await User.find({
+      _id: { $in: validObjectIds },
+    }).select("-password");
+
+    const foundUserIds = new Set(users.map((user) => String(user._id)));
+    const missingUserIds = uniqueUserIds.filter((id) => !foundUserIds.has(id));
+    const updatedUsers = [];
+    const skippedUsers = [];
+    const nextStatus = moderationStatusMap[normalizedAction];
+    const actionLabel = moderationActionLabelMap[normalizedAction];
+
+    for (const user of users) {
+      if (String(user._id) === String(req.user._id)) {
+        skippedUsers.push({
+          _id: user._id,
+          email: user.email,
+          reason: "You cannot moderate your own account",
+        });
+        continue;
+      }
+
+      if (user.role === "admin") {
+        skippedUsers.push({
+          _id: user._id,
+          email: user.email,
+          reason: "Admin accounts cannot be moderated from this route",
+        });
+        continue;
+      }
+
+      const previousStatus = user.status;
+
+      user.status = nextStatus;
+      user.moderation = {
+        action: normalizedAction === "activate" ? "none" : nextStatus,
+        reason: normalizedAction === "activate" ? null : normalizedReason,
+        updatedBy: req.user._id,
+        updatedAt: new Date(),
+      };
+
+      await user.save();
+
+      await writeAdminAuditLog(req, {
+        action: `user_${actionLabel}`,
+        targetType: user.role === "coach" ? "coach" : "user",
+        targetId: user._id,
+        description: `Admin ${actionLabel} account ${user.email} via bulk action`,
+        metadata: {
+          bulkAction: true,
+          previousStatus,
+          newStatus: nextStatus,
+          reason: normalizedAction === "activate" ? null : normalizedReason,
+        },
+      });
+
+      updatedUsers.push({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        previousStatus,
+        status: user.status,
+      });
+    }
+
+    if (updatedUsers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No eligible users found for the selected bulk action",
+        data: {
+          updatedCount: 0,
+          skippedCount: skippedUsers.length,
+          missingUserIds,
+          skippedUsers,
+        },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk ${normalizedAction} completed successfully`,
+      data: {
+        updatedCount: updatedUsers.length,
+        skippedCount: skippedUsers.length,
+        missingUserIds,
+        updatedUsers,
+        skippedUsers,
+      },
     });
   } catch (err) {
     console.error(err);
