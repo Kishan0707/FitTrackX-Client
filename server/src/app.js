@@ -24,6 +24,7 @@ const emailRoutes = require("./routes/email.route");
 const exportRoutes = require("./routes/export.route");
 const notificationRoutes = require("./routes/notification.route");
 const coachActivityRoutes = require("./routes/coachActivity.route");
+const sessionRoutes = require("./routes/session.routes");
 const helmet = require("helmet");
 // const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss");
@@ -95,6 +96,12 @@ app.use("/api/email", emailRoutes);
 app.use("/api/export", exportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", coachActivityRoutes);
+app.use("/api/sessions", sessionRoutes);
+
+
+
+
+// 
 app.get("/", (req, res) => {
   res.send("FitTrack X API Running 🚀");
 });

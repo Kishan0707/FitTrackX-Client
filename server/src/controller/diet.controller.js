@@ -54,6 +54,7 @@ exports.addDiet = async (req, res) => {
 
       diet = await dietModel.create({
         userId: req.user._id,
+        coachId: req.user._id, // Set coachId to current user
         meals,
         totalCalories,
         totalProtein,

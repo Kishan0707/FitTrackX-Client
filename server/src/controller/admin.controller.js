@@ -881,32 +881,32 @@ exports.getRevenueReport = async (req, res) => {
     const Subscription = require("../models/subscription.model");
 
     const totalRevenue = await Subscription.aggregate([
-      { $match: { status: "completed" } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+      { $match: { status: { $in: ["active", "completed"] } } },
+      { $group: { _id: null, total: { $sum: "$price" } } },
     ]);
 
     const last30Days = new Date();
     last30Days.setDate(last30Days.getDate() - 30);
 
     const monthlyRevenue = await Subscription.aggregate([
-      { $match: { status: "completed", createdAt: { $gte: last30Days } } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+      { $match: { status: { $in: ["active", "completed"] }, createdAt: { $gte: last30Days } } },
+      { $group: { _id: null, total: { $sum: "$price" } } },
     ]);
 
     const paymentsByPlan = await Subscription.aggregate([
-      { $match: { status: "completed" } },
+      { $match: { status: { $in: ["active", "completed"] } } },
       {
         $group: {
-          _id: "$planType",
+          _id: "$plan",
           count: { $sum: 1 },
-          revenue: { $sum: "$amount" },
+          revenue: { $sum: "$price" },
         },
       },
       { $sort: { revenue: -1 } },
     ]);
 
     const totalPayments = await Subscription.countDocuments({
-      status: "active",
+      status: { $in: ["active", "completed"] },
     });
 
     res.status(200).json({

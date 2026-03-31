@@ -8,6 +8,12 @@ const workoutSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    coachId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     type: {
       type: String,
       enum: [
@@ -20,6 +26,11 @@ const workoutSchema = new mongoose.Schema(
         "run",
         "boxing",
       ],
+      required: true,
+      index: true,
+    },
+    title: {
+      type: String,
       required: true,
       index: true,
     },
@@ -45,6 +56,11 @@ const workoutSchema = new mongoose.Schema(
         },
       },
     ],
+    status: {
+      type: String,
+      enum: ["completed", "cancelled", "pending"],
+      default: "pending",
+    },
     caloriesBurned: {
       type: Number,
       default: 0,

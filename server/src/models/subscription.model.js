@@ -39,10 +39,33 @@ const subscriptionSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    price: {
+      type: Number,
+      ref: "Plan",
+      required: true,
+    },
+
+    // Payment details
+    amount: {
+      type: Number,
+      default: function () { return this.price; }
+    },
+
+    paymentId: {
+      type: String,
+    },
+
+    orderId: {
+      type: String,
+    },
+
+    signature: {
+      type: String,
+    },
 
     status: {
       type: String,
-      enum: ["active", "expired", "cancelled"],
+      enum: ["active", "expired", "cancelled", "completed"],
       default: "active",
     },
   },

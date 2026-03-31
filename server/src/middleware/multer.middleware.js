@@ -1,7 +1,7 @@
 const multer = require("multer");
 const fs = require("fs");
 
-const uploadDir = "D:\\progress-photos";
+const uploadDir = "C:\\progress-photos";
 
 // create directory automatically
 if (!fs.existsSync(uploadDir)) {

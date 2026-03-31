@@ -54,6 +54,11 @@ const dietSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    coachId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
     date: {
       type: Date,

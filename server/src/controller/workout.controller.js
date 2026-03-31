@@ -3,39 +3,63 @@ const User = require("../models/user.model");
 
 exports.createWorkout = async (req, res) => {
   try {
-    const { type, exercises, caloriesBurned, duration } = req.body;
+    const { type, title, exercises, caloriesBurned, duration, userId } = req.body;
 
-    const workout = await Workout.create({
-      userId: req.user._id,
-      type,
-      exercises,
-      caloriesBurned,
-      duration,
-    });
-
-    const user = await User.findById(req.user._id);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (!user.lastWorkoutDate) {
-      user.workoutStreak = 1;
-      user.lastWorkoutDate = today;
-    } else {
-      const lastDate = new Date(user.lastWorkoutDate);
-      lastDate.setHours(0, 0, 0, 0);
-
-      const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-        user.workoutStreak += 1;
-        user.lastWorkoutDate = today;
-      } else if (diffDays > 1) {
-        user.workoutStreak = 1;
-        user.lastWorkoutDate = today;
-      }
+    // Validate required fields
+    if (!type) {
+      return res.status(400).json({
+        success: false,
+        message: "type is required",
+      });
     }
 
-    await user.save();
+    const workoutData = {
+      userId: userId || req.user._id, // Use provided userId or current user
+      type,
+      title: title || type.charAt(0).toUpperCase() + type.slice(1) + " Workout", // Auto-generate title if not provided
+      exercises: exercises || [],
+      caloriesBurned: caloriesBurned || 0,
+      duration: duration || 0,
+      coachId: req.user._id, // Current user is the coach/creator
+    };
+
+    console.log("Creating workout with data:", workoutData);
+
+    console.log("Attempting to save to database...");
+    const workout = await Workout.create(workoutData);
+    console.log("✓ Workout saved successfully!");
+    console.log("Saved workout ID:", workout._id);
+    console.log("Saved workout details:", {
+      _id: workout._id,
+      userId: workout.userId,
+      coachId: workout.coachId 
+    });
+
+    const user = await User.findById(workoutData.userId);
+    if (user) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (!user.lastWorkoutDate) {
+        user.workoutStreak = 1;
+        user.lastWorkoutDate = today;
+      } else {
+        const lastDate = new Date(user.lastWorkoutDate);
+        lastDate.setHours(0, 0, 0, 0);
+
+        const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 1) {
+          user.workoutStreak += 1;
+          user.lastWorkoutDate = today;
+        } else if (diffDays > 1) {
+          user.workoutStreak = 1;
+          user.lastWorkoutDate = today;
+        }
+      }
+
+      await user.save();
+    }
 
     res.status(201).json({
       success: true,
@@ -43,11 +67,12 @@ exports.createWorkout = async (req, res) => {
       data: workout,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error creating workout:", err);
 
     res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: err.message,
     });
   }
 };
@@ -56,12 +81,29 @@ exports.getAllWorkouts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const workouts = await Workout.find({
-      userId: req.user._id,
-    })
+
+    console.log("Fetching workouts for user:", req.user._id, "Role:", req.user.role);
+
+    // If user is a coach, show workouts they created (where coachId = their ID)
+    // If user is a regular user, show workouts assigned to them or created for them
+    let query = {};
+    if (req.user.role === "coach" || req.user.role === "admin") {
+      query = { coachId: req.user._id };
+      console.log("Coach/Admin query:", query);
+    } else {
+      // Regular user sees workouts assigned to them
+      query = { userId: req.user._id };
+      console.log("User query:", query);
+    }
+
+    const workouts = await Workout.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
+
+    const totalCount = await Workout.countDocuments(query);
+    console.log("Workouts found:", workouts.length, "Total in DB with query:", totalCount);
+    console.log("Sample workout:", workouts[0] ? { _id: workouts[0]._id, userId: workouts[0].userId, coachId: workouts[0].coachId } : "none");
 
     res.status(200).json({
       success: true,
@@ -69,6 +111,7 @@ exports.getAllWorkouts = async (req, res) => {
       data: workouts,
     });
   } catch (err) {
+    console.error("Error fetching workouts:", err);
     res.status(500).json({
       success: false,
       message: err.message,
@@ -87,7 +130,11 @@ exports.updateWorkouts = async (req, res) => {
       });
     }
 
-    if (workout.userId.toString() !== req.user._id.toString()) {
+    // Allow update if user is the one the workout is assigned to OR the coach/admin who created it
+    if (
+      workout.userId.toString() !== req.user._id.toString() &&
+      workout.coachId.toString() !== req.user._id.toString()
+    ) {
       return res.status(401).json({
         success: false,
         message: "Not authorized",
@@ -113,7 +160,11 @@ exports.updateWorkouts = async (req, res) => {
 
 exports.deleteWorkout = async (req, res) => {
   try {
+    console.log("Attempting to delete workout with ID:", req.params.id);
+    console.log("User ID:", req.user._id);
+
     const workout = await Workout.findById(req.params.id);
+    console.log("Workout found:", workout ? { _id: workout._id, userId: workout.userId, coachId: workout.coachId } : "NOT FOUND");
 
     if (!workout) {
       return res.status(404).json({
@@ -122,7 +173,13 @@ exports.deleteWorkout = async (req, res) => {
       });
     }
 
-    if (workout.userId.toString() !== req.user._id.toString()) {
+    // Allow deletion if user is the one the workout is assigned to OR the coach/admin who created it
+    const userIdMatch = workout.userId?.toString() === req.user._id.toString();
+    const coachIdMatch = workout.coachId?.toString() === req.user._id.toString();
+
+    console.log("userIdMatch:", userIdMatch, "coachIdMatch:", coachIdMatch);
+
+    if (!userIdMatch && !coachIdMatch) {
       return res.status(401).json({
         success: false,
         message: "Not authorized",
@@ -130,12 +187,14 @@ exports.deleteWorkout = async (req, res) => {
     }
 
     await workout.deleteOne();
+    console.log("Workout deleted successfully");
 
     res.status(200).json({
       success: true,
       message: "Workout deleted",
     });
   } catch (err) {
+    console.error("Error deleting workout:", err);
     res.status(500).json({
       success: false,
       message: err.message,
