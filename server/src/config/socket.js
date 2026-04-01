@@ -1,6 +1,7 @@
 const socketIO = require("socket.io");
 
 let io;
+const onlineUsers = new Map(); // socketId -> userId
 
 const initializeSocket = (server) => {
   io = socketIO(server, {
@@ -12,15 +13,31 @@ const initializeSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    console.log("New client connected:", socket.id);
-
     socket.on("join", (userId) => {
       socket.join(userId);
-      console.log(`User ${userId} joined their room`);
+      onlineUsers.set(socket.id, userId);
+      io.emit("onlineUsers", Array.from(new Set(onlineUsers.values())));
+    });
+
+    socket.on("typing", ({ senderId, receiverId }) => {
+      io.to(receiverId).emit("typing", senderId);
+    });
+
+    socket.on("stopTyping", ({ senderId, receiverId }) => {
+      io.to(receiverId).emit("stopTyping", senderId);
+    });
+
+    socket.on("sendMessage", async ({ receiverId, message }) => {
+      const senderId = onlineUsers.get(socket.id);
+      if (!senderId) return;
+      const Message = require("../models/message.model");
+      const msg = await Message.create({ sender: senderId, receiverId, message });
+      io.to(receiverId.toString()).emit("receiveMessage", msg);
     });
 
     socket.on("disconnect", () => {
-      console.log("Client disconnected:", socket.id);
+      onlineUsers.delete(socket.id);
+      io.emit("onlineUsers", Array.from(new Set(onlineUsers.values())));
     });
   });
 
@@ -59,3 +76,4 @@ module.exports = {
   emitWorkoutUpdate,
   emitDietUpdate,
 };
+  

@@ -25,6 +25,7 @@ const exportRoutes = require("./routes/export.route");
 const notificationRoutes = require("./routes/notification.route");
 const coachActivityRoutes = require("./routes/coachActivity.route");
 const sessionRoutes = require("./routes/session.routes");
+const messageRoutes = require("./routes/message.route");
 const helmet = require("helmet");
 // const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss");
@@ -97,6 +98,7 @@ app.use("/api/export", exportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", coachActivityRoutes);
 app.use("/api/sessions", sessionRoutes);
+app.use("/api/messages", messageRoutes);
 
 
 
