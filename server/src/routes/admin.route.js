@@ -43,6 +43,7 @@ router.patch(
   adminController.updateUserModeration,
 );
 router.delete("/users/:id", protect, adminOnly, adminController.deleteUsers);
+router.patch("/users/:id/role", protect, adminOnly, authorizeRoles("admin"), adminController.updateUserRole);
 router.get(
   "/audit-logs",
   protect,

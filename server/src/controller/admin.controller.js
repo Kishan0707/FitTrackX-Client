@@ -489,6 +489,49 @@ exports.bulkUserAction = async (req, res) => {
   }
 };
 
+exports.updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+
+    if (!role || !["user", "coach"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid role is required: user or coach",
+      });
+    }
+
+    const user = await User.findById(req.params.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({ success: false, message: "Admin role cannot be changed" });
+    }
+
+    const previousRole = user.role;
+    user.role = role;
+    await user.save();
+
+    await writeAdminAuditLog(req, {
+      action: "user_role_updated",
+      targetType: role,
+      targetId: user._id,
+      description: `Admin changed ${user.email} role from ${previousRole} to ${role}`,
+      metadata: { previousRole, newRole: role },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Role updated to ${role}`,
+      data: { _id: user._id, name: user.name, email: user.email, role: user.role },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
 exports.deleteUsers = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select(
