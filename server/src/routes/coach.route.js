@@ -12,8 +12,12 @@ router.get(
   coachController.dashboardStats,
 );
 router.post("/request", protect, coachController.requestCoach);
+router.get("/my-request", protect, coachController.getMyCoachRequest);
+router.get("/pending-requests", protect, authorizeRoles("coach"), coachController.getPendingRequests);
+router.patch("/respond-request", protect, authorizeRoles("coach"), coachController.respondToRequest);
 router.get("/clients", protect, coachController.getMyCoach);
 router.post("/assign-workout", protect, coachController.assignWorkout);
+router.get("/client-detail/:userId", protect, authorizeRoles("coach"), coachController.clientDetail);
 router.get("/client-progress/:userId", protect, coachController.clientProgress);
 router.post(
   "/assign-member",

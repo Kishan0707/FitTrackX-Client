@@ -1,6 +1,8 @@
 const User = require("../models/user.model");
 const Workout = require("../models/workout.model");
 const Bodymeasurements = require("../models/bodyMeasurement.model");
+const Diet = require("../models/diet.model");
+const Steps = require("../models/steps.model");
 const { Plan } = require("../models/plan.model");
 const redisClient = require("../config/redis");
 const clients = require("../models/user.model");
@@ -9,47 +11,66 @@ const Session = require("../models/session.model");
 
 exports.requestCoach = async (req, res) => {
   try {
-    const { coachId } = req.body;
-
+    const { coachId, target } = req.body;
     const coach = await User.findById(coachId);
+    if (!coach || coach.role !== "coach")
+      return res.status(404).json({ success: false, message: "Coach not found" });
 
-    if (!coach || coach.role !== "coach") {
-      return res.status(404).json({
-        success: false,
-        message: "Coach not found",
-      });
-    }
-
-    const user = await User.findById(req.user._id);
-    const previousCoachId = user.assignedCoach || user.coachId;
-    user.coachId = coachId;
-    user.assignedCoach = coachId;
-    await user.save();
-
-    if (
-      previousCoachId &&
-      previousCoachId.toString() !== coachId.toString()
-    ) {
-      await User.updateOne(
-        { _id: previousCoachId, role: "coach" },
-        { $pull: { clients: user._id } },
-      );
-    }
-
-    await User.updateOne(
-      { _id: coachId, role: "coach" },
-      { $addToSet: { clients: user._id } },
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Coach Assigned successfully",
+    await User.findByIdAndUpdate(req.user._id, {
+      coachRequest: { coachId, status: "pending", target: target || null },
     });
+
+    res.status(200).json({ success: true, message: "Request sent to coach" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+exports.getPendingRequests = async (req, res) => {
+  try {
+    const requests = await User.find({
+      "coachRequest.coachId": req.user._id,
+      "coachRequest.status": "pending",
+    }).select("name email coachRequest");
+    res.status(200).json({ success: true, data: requests });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+exports.respondToRequest = async (req, res) => {
+  try {
+    const { clientId, action } = req.body; // action: "accepted" | "rejected"
+    const client = await User.findOne({
+      _id: clientId,
+      "coachRequest.coachId": req.user._id,
+      "coachRequest.status": "pending",
     });
+    if (!client)
+      return res.status(404).json({ success: false, message: "Request not found" });
+
+    client.coachRequest.status = action;
+    if (action === "accepted") {
+      client.coachId = req.user._id;
+      client.assignedCoach = req.user._id;
+      await User.findByIdAndUpdate(req.user._id, { $addToSet: { clients: clientId } });
+    }
+    await client.save();
+
+    res.status(200).json({ success: true, message: `Request ${action}` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+exports.getMyCoachRequest = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("coachRequest")
+      .populate("coachRequest.coachId", "name email specialization");
+    res.status(200).json({ success: true, data: user.coachRequest });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -102,23 +123,84 @@ exports.assignWorkout = async (req, res) => {
   }
 };
 
-exports.clientProgress = async (req, res) => {
+exports.clientDetail = async (req, res) => {
   try {
-    const progress = await Bodymeasurements.find({
-      userId: req.params.userId,
-    }).sort({
-      createdAt: 1,
-    });
+    const { userId } = req.params;
+    const client = await User.findOne({
+      _id: userId,
+      $or: [{ assignedCoach: req.user._id }, { coachId: req.user._id }],
+    }).select("name email goal weight height");
+
+    if (!client)
+      return res.status(404).json({ success: false, message: "Client not found" });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [steps, todaySteps, workouts, diets, measurements] = await Promise.all([
+      Steps.find({ userId }).sort({ date: 1 }).select("steps goal date"),
+      Steps.findOne({ userId, date: { $gte: today } }).select("steps goal"),
+      Workout.find({ userId }).sort({ createdAt: -1 }).limit(10).select("title type status caloriesBurned duration date exercises"),
+      Diet.find({ userId }).sort({ date: -1 }).limit(7).select("date totalCalories totalProtein totalCarbs totalFat meals"),
+      Bodymeasurements.find({ userId }).sort({ date: -1 }).limit(10).select("weight bodyFat date"),
+    ]);
+
     res.status(200).json({
       success: true,
-      data: progress,
+      data: { client, steps, todaySteps, workouts, diets, measurements },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.clientProgress = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Verify this client belongs to the coach
+    const client = await User.findOne({
+      _id: userId,
+      $or: [{ assignedCoach: req.user._id }, { coachId: req.user._id }],
+    }).select("name email goal weight");
+
+    if (!client) {
+      return res.status(404).json({ success: false, message: "Client not found" });
+    }
+
+    const [measurements, workouts, diets] = await Promise.all([
+      Bodymeasurements.find({ userId }).sort({ createdAt: 1 }).select("weight bodyFat createdAt"),
+      Workout.find({ userId }).sort({ createdAt: 1 }).select("caloriesBurned createdAt"),
+      Diet.find({ userId }).sort({ createdAt: 1 }).select("totalProtein createdAt"),
+    ]);
+
+    const weightHistory = measurements.map((m) => ({
+      weight: m.weight,
+      date: m.createdAt,
+    }));
+
+    const caloriesBurned = workouts.map((w) => ({
+      calories: w.caloriesBurned,
+      date: w.createdAt,
+    }));
+
+    const proteinIntake = diets.map((d) => ({
+      protein: d.totalProtein,
+      date: d.createdAt,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        client,
+        weightHistory,
+        caloriesBurned,
+        proteinIntake,
+      },
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 exports.assignMember = async (req, res) => {

@@ -35,7 +35,6 @@ const userSchema = new mongoose.Schema(
       enum: ["lose weight", "bulk", "cut", "maintain", "gain weight"],
     },
     coachId: {
-      // user ke coach ka reference
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
@@ -44,6 +43,11 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+    coachRequest: {
+      coachId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      status: { type: String, enum: ["pending", "accepted", "rejected"], default: null },
+      target: { type: String, default: null },
     },
     specialization: {
       type: String,
