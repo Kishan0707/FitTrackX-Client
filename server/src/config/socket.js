@@ -27,13 +27,13 @@ const initializeSocket = (server) => {
       io.to(receiverId).emit("stopTyping", senderId);
     });
 
-    socket.on("sendMessage", async ({ receiverId, message }) => {
-      const senderId = onlineUsers.get(socket.id);
-      if (!senderId) return;
-      const Message = require("../models/message.model");
-      const msg = await Message.create({ sender: senderId, receiverId, message });
-      io.to(receiverId.toString()).emit("receiveMessage", msg);
-    });
+    // socket.on("sendMessage", async ({ receiverId, message }) => {
+    //   const senderId = onlineUsers.get(socket.id);
+    //   if (!senderId) return;
+    //   const Message = require("../models/message.model");
+    //   const msg = await Message.create({ sender: senderId, receiverId, message });
+    //   io.to(receiverId.toString()).emit("receiveMessage", msg);
+    // });
 
     socket.on("disconnect", () => {
       onlineUsers.delete(socket.id);
@@ -76,4 +76,3 @@ module.exports = {
   emitWorkoutUpdate,
   emitDietUpdate,
 };
-  
