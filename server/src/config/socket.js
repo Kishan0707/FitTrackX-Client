@@ -6,7 +6,13 @@ const onlineUsers = new Map(); // socketId -> userId
 const initializeSocket = (server) => {
   io = socketIO(server, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:5173",
+      origin: (origin, callback) => {
+        if (!origin || /^https:\/\/fit-track-x-clients.*\.vercel\.app$/.test(origin) || origin === "http://localhost:5173") {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       methods: ["GET", "POST"],
       credentials: true,
     },

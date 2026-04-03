@@ -38,13 +38,21 @@ const logger = require("../src/config/logger");
 const errorHandler = require("./middleware/error.middleware");
 const redis = require("./config/redis");
 const allowedOrigins = [
-  "http://localhost:5173", // local
-  "https://fit-track-x-clients.vercel.app", // production
+  "http://localhost:5173",
+  "https://fit-track-x-clients.vercel.app",
 ];
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  // allow all vercel preview deployments for this project
+  if (/^https:\/\/fit-track-x-clients.*\.vercel\.app$/.test(origin)) return true;
+  return false;
+};
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
