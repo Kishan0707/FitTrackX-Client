@@ -96,7 +96,12 @@ exports.getAllWorkouts = async (req, res) => {
       console.log("User query:", query);
     }
 
+    if ((req.user.role === "coach" || req.user.role === "admin") && req.query.userId) {
+      query.userId = req.query.userId;
+    }
+
     const workouts = await Workout.find(query)
+      .populate("userId", "name email")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);

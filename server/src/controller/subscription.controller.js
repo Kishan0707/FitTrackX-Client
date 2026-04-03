@@ -1,4 +1,4 @@
-const Plan = require("../models/plan.model");
+const { Plan } = require("../models/plan.model");
 const Subscription = require("../models/subscription.model");
 exports.subscribePlan = async (req, res) => {
   try {
@@ -18,6 +18,7 @@ exports.subscribePlan = async (req, res) => {
       plan: plan.title,
       startDate: new Date(),
       endDate,
+      price: plan.price,
       amount: plan.price,
       status: "active",
     });

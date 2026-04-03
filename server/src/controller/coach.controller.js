@@ -123,6 +123,67 @@ exports.assignWorkout = async (req, res) => {
   }
 };
 
+exports.coachReport = async (req, res) => {
+  try {
+    const coachId = req.user._id;
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const coachClientFilter = {
+      role: "user",
+      $or: [{ assignedCoach: coachId }, { coachId: coachId }],
+    };
+
+    const [clients, sessions, workouts, diets, steps] = await Promise.all([
+      User.find(coachClientFilter).select("name email status goal weight createdAt"),
+      Session.find({ coachId }).populate("clientId", "name"),
+      Workout.find({ coachId }).sort({ createdAt: -1 }),
+      Diet.find({ coachId }).sort({ date: -1 }),
+      Steps.find({ coachId }).sort({ date: -1 }),
+    ]);
+
+    const recentSessions = sessions.filter((s) => new Date(s.date) >= since);
+    const sessionsByStatus = ["pending", "accepted", "rejected", "completed", "scheduled"].map((st) => ({
+      status: st,
+      count: sessions.filter((s) => s.status === st).length,
+    }));
+
+    const workoutsByType = workouts.reduce((acc, w) => {
+      acc[w.type] = (acc[w.type] || 0) + 1;
+      return acc;
+    }, {});
+
+    const totalCalories = workouts.reduce((s, w) => s + (w.caloriesBurned || 0), 0);
+    const avgProtein = diets.length
+      ? (diets.reduce((s, d) => s + (d.totalProtein || 0), 0) / diets.length).toFixed(1)
+      : 0;
+
+    const stepsMetGoal = steps.filter((s) => s.steps >= s.goal).length;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        clients: { total: clients.length, list: clients },
+        sessions: {
+          total: sessions.length,
+          recent: recentSessions.length,
+          byStatus: sessionsByStatus,
+        },
+        workouts: {
+          total: workouts.length,
+          totalCalories,
+          byType: Object.entries(workoutsByType).map(([type, count]) => ({ type, count })),
+        },
+        diet: { total: diets.length, avgProtein },
+        steps: { total: steps.length, metGoal: stepsMetGoal },
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.clientDetail = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -500,6 +561,33 @@ exports.getSessions = async (req, res) => {
     });
   }
 }
+exports.getClientSessions = async (req, res) => {
+  try {
+    const sessions = await Session.find({ clientId: req.user._id })
+      .populate("coachId", "name email")
+      .sort({ date: -1 });
+    res.status(200).json({ success: true, data: sessions });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.respondSession = async (req, res) => {
+  try {
+    const { action } = req.body; // accepted | rejected
+    const session = await Session.findOneAndUpdate(
+      { _id: req.params.id, clientId: req.user._id, status: "pending" },
+      { status: action },
+      { new: true }
+    );
+    if (!session)
+      return res.status(404).json({ success: false, message: "Session not found" });
+    res.status(200).json({ success: true, data: session });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.deleteSessions = async (req, res) => {
   try {
     const session = await Session.findByIdAndDelete(req.params.id);

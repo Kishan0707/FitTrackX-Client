@@ -39,6 +39,7 @@ exports.verifyPayment = async (req, res) => {
       startDate: new Date(),
       endDate: endDate,
       plan: plan.title,
+      price: plan.price,
       paymentId: razorpay_payment_id,
       orderId: razorpay_order_id,
       signature: razorpay_signature,

@@ -16,18 +16,8 @@ const subscriptionSchema = new mongoose.Schema(
 
     plan: {
       type: String,
-      enum: [
-        "basic",
-        "standard",
-        "pro",
-        "premium",
-        "elite",
-        "ultimate",
-        "vip",
-        "enterprise",
-      ],
-      default: "basic",
       required: true,
+      trim: true,
     },
 
     startDate: {
@@ -41,8 +31,8 @@ const subscriptionSchema = new mongoose.Schema(
     },
     price: {
       type: Number,
-      ref: "Plan",
       required: true,
+      min: 0,
     },
 
     // Payment details

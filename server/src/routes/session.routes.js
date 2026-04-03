@@ -4,10 +4,12 @@ const router = express.Router();
 const { protect } = require("../middleware/auth.middleware");
 const { authorizeRoles } = require("../middleware/role.middleware");
 
-router.use(protect, authorizeRoles("coach", "admin"));
+router.use(protect);
 
-router.post("/", sessionController.createSessions);
-router.get("/my-sessions", sessionController.getSessions);
-router.delete("/:id", sessionController.deleteSessions);
+router.post("/", authorizeRoles("coach", "admin"), sessionController.createSessions);
+router.get("/my-sessions", authorizeRoles("coach", "admin"), sessionController.getSessions);
+router.get("/client-sessions", sessionController.getClientSessions);
+router.patch("/:id/respond", sessionController.respondSession);
+router.delete("/:id", authorizeRoles("coach", "admin"), sessionController.deleteSessions);
 
 module.exports = router;

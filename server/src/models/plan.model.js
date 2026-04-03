@@ -12,6 +12,7 @@ exports.planSchema = new mongoose.Schema(
     title: {
       type: String,
       required: true,
+      trim: true,
     },
     members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
@@ -19,37 +20,39 @@ exports.planSchema = new mongoose.Schema(
       // plan ke baare mein details
       type: String,
       required: true,
+      trim: true,
     },
     duration: {
-      // plan ki duration in weeks
+      // frontend currently sends duration in days
       type: Number,
       required: true,
+      min: 1,
     },
     price: {
       type: Number,
       required: true,
+      min: 0,
     },
     subscriptionPlan: {
       type: [String],
-      required: true,
+      default: [],
       ref: "Plan",
     },
-    // features: {
-    // plan ke features jaise ki access to workouts, diet plans, etc.
-    // type: [String],
-    // required: true,
-    // },
+    features: {
+      // plan ke features jaise ki access to workouts, diet plans, etc.
+      type: [String],
+      default: [],
+    },
     workouts: [
       {
         type: [String],
-        required: true,
       },
     ],
     dietPlan: {
       // plan ke diet details
       // jaise ki breakfast, lunch, dinner, etc.
       type: [String],
-      // required: true,
+      default: [],
     },
   },
   {

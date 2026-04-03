@@ -27,8 +27,8 @@ const sessionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["scheduled", "completed", "cancelled"],
-      default: "scheduled",
+      enum: ["pending", "accepted", "rejected", "completed", "cancelled"],
+      default: "pending",
     },
   },
   { timestamps: true }
