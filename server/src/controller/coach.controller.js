@@ -588,15 +588,84 @@ exports.respondSession = async (req, res) => {
   }
 };
 
-exports.deleteSessions = async (req, res) => {
+exports.updateSession = async (req, res) => {
   try {
-    const session = await Session.findByIdAndDelete(req.params.id);
+    const session = await Session.findById(req.params.id);
+
     if (!session) {
       return res.status(404).json({
         success: false,
         message: "Session not found",
       });
     }
+
+    if (
+      req.user.role !== "admin" &&
+      session.coachId.toString() !== req.user._id.toString()
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized",
+      });
+    }
+
+    const allowedFields = [
+      "title",
+      "clientId",
+      "date",
+      "duration",
+      "notes",
+      "status",
+    ];
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        session[field] = req.body[field];
+      }
+    });
+
+    await session.save();
+
+    const updatedSession = await Session.findById(session._id).populate(
+      "clientId",
+      "name email",
+    );
+
+    res.status(200).json({
+      success: true,
+      data: updatedSession,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({
+      success: false,
+      message: err.message || "Failed to update session",
+    });
+  }
+};
+
+exports.deleteSessions = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found",
+      });
+    }
+
+    if (
+      req.user.role !== "admin" &&
+      session.coachId.toString() !== req.user._id.toString()
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized",
+      });
+    }
+
+    await session.deleteOne();
+
     res.status(200).json({
       success: true,
       message: "Session deleted successfully",
