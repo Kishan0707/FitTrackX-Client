@@ -97,7 +97,7 @@ exports.createPlans = async (req, res) => {
     }
 
     const newPlan = await Plan.create({
-      coachId: req.user._id,
+      coachId,
       title,
       description,
       price,
@@ -246,11 +246,7 @@ exports.updatePlan = async (req, res) => {
       updates.features = normalizeFeatures(req.body.features);
     }
 
-    plan = await Plan.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      { new: true },
-    );
+    plan = await Plan.findByIdAndUpdate(req.params.id, updates, { new: true });
 
     res.status(200).json({
       success: true,
@@ -357,16 +353,13 @@ exports.assignPlanToClient = async (req, res) => {
     }
 
     const clientQuery =
-      req.user.role === "admin"
-        ? { _id: targetUserId, role: "user" }
-        : {
-            _id: targetUserId,
-            role: "user",
-            $or: [
-              { assignedCoach: req.user._id },
-              { coachId: req.user._id },
-            ],
-          };
+      req.user.role === "admin" ?
+        { _id: targetUserId, role: "user" }
+      : {
+          _id: targetUserId,
+          role: "user",
+          $or: [{ assignedCoach: req.user._id }, { coachId: req.user._id }],
+        };
 
     const client = await User.findOne(clientQuery).select("_id name email");
 

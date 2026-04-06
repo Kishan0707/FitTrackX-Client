@@ -14,7 +14,9 @@ exports.requestCoach = async (req, res) => {
     const { coachId, target } = req.body;
     const coach = await User.findById(coachId);
     if (!coach || coach.role !== "coach")
-      return res.status(404).json({ success: false, message: "Coach not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Coach not found" });
 
     await User.findByIdAndUpdate(req.user._id, {
       coachRequest: { coachId, status: "pending", target: target || null },
@@ -47,13 +49,17 @@ exports.respondToRequest = async (req, res) => {
       "coachRequest.status": "pending",
     });
     if (!client)
-      return res.status(404).json({ success: false, message: "Request not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Request not found" });
 
     client.coachRequest.status = action;
     if (action === "accepted") {
       client.coachId = req.user._id;
       client.assignedCoach = req.user._id;
-      await User.findByIdAndUpdate(req.user._id, { $addToSet: { clients: clientId } });
+      await User.findByIdAndUpdate(req.user._id, {
+        $addToSet: { clients: clientId },
+      });
     }
     await client.save();
 
@@ -81,8 +87,10 @@ exports.getMyCoach = async (req, res) => {
       role: "user",
       $or: [{ assignedCoach: req.user._id }, { coachId: req.user._id }],
     };
-    const clients = await User.find(coachClientFilter).select("_id name email").lean();
-    
+    const clients = await User.find(coachClientFilter)
+      .select("_id name email goal")
+      .lean();
+
     res.status(200).json({
       success: true,
       count: clients.length,
@@ -136,7 +144,9 @@ exports.coachReport = async (req, res) => {
     };
 
     const [clients, sessions, workouts, diets, steps] = await Promise.all([
-      User.find(coachClientFilter).select("name email status goal weight createdAt"),
+      User.find(coachClientFilter).select(
+        "name email status goal weight createdAt",
+      ),
       Session.find({ coachId }).populate("clientId", "name"),
       Workout.find({ coachId }).sort({ createdAt: -1 }),
       Diet.find({ coachId }).sort({ date: -1 }),
@@ -144,7 +154,13 @@ exports.coachReport = async (req, res) => {
     ]);
 
     const recentSessions = sessions.filter((s) => new Date(s.date) >= since);
-    const sessionsByStatus = ["pending", "accepted", "rejected", "completed", "scheduled"].map((st) => ({
+    const sessionsByStatus = [
+      "pending",
+      "accepted",
+      "rejected",
+      "completed",
+      "scheduled",
+    ].map((st) => ({
       status: st,
       count: sessions.filter((s) => s.status === st).length,
     }));
@@ -154,9 +170,15 @@ exports.coachReport = async (req, res) => {
       return acc;
     }, {});
 
-    const totalCalories = workouts.reduce((s, w) => s + (w.caloriesBurned || 0), 0);
-    const avgProtein = diets.length
-      ? (diets.reduce((s, d) => s + (d.totalProtein || 0), 0) / diets.length).toFixed(1)
+    const totalCalories = workouts.reduce(
+      (s, w) => s + (w.caloriesBurned || 0),
+      0,
+    );
+    const avgProtein =
+      diets.length ?
+        (
+          diets.reduce((s, d) => s + (d.totalProtein || 0), 0) / diets.length
+        ).toFixed(1)
       : 0;
 
     const stepsMetGoal = steps.filter((s) => s.steps >= s.goal).length;
@@ -173,7 +195,10 @@ exports.coachReport = async (req, res) => {
         workouts: {
           total: workouts.length,
           totalCalories,
-          byType: Object.entries(workoutsByType).map(([type, count]) => ({ type, count })),
+          byType: Object.entries(workoutsByType).map(([type, count]) => ({
+            type,
+            count,
+          })),
         },
         diet: { total: diets.length, avgProtein },
         steps: { total: steps.length, metGoal: stepsMetGoal },
@@ -193,18 +218,30 @@ exports.clientDetail = async (req, res) => {
     }).select("name email goal weight height");
 
     if (!client)
-      return res.status(404).json({ success: false, message: "Client not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Client not found" });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [steps, todaySteps, workouts, diets, measurements] = await Promise.all([
-      Steps.find({ userId }).sort({ date: 1 }).select("steps goal date"),
-      Steps.findOne({ userId, date: { $gte: today } }).select("steps goal"),
-      Workout.find({ userId }).sort({ createdAt: -1 }).limit(10).select("title type status caloriesBurned duration date exercises"),
-      Diet.find({ userId }).sort({ date: -1 }).limit(7).select("date totalCalories totalProtein totalCarbs totalFat meals"),
-      Bodymeasurements.find({ userId }).sort({ date: -1 }).limit(10).select("weight bodyFat date"),
-    ]);
+    const [steps, todaySteps, workouts, diets, measurements] =
+      await Promise.all([
+        Steps.find({ userId }).sort({ date: 1 }).select("steps goal date"),
+        Steps.findOne({ userId, date: { $gte: today } }).select("steps goal"),
+        Workout.find({ userId })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .select("title type status caloriesBurned duration date exercises"),
+        Diet.find({ userId })
+          .sort({ date: -1 })
+          .limit(7)
+          .select("date totalCalories totalProtein totalCarbs totalFat meals"),
+        Bodymeasurements.find({ userId })
+          .sort({ date: -1 })
+          .limit(10)
+          .select("weight bodyFat date"),
+      ]);
 
     res.status(200).json({
       success: true,
@@ -226,13 +263,21 @@ exports.clientProgress = async (req, res) => {
     }).select("name email goal weight");
 
     if (!client) {
-      return res.status(404).json({ success: false, message: "Client not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Client not found" });
     }
 
     const [measurements, workouts, diets] = await Promise.all([
-      Bodymeasurements.find({ userId }).sort({ createdAt: 1 }).select("weight bodyFat createdAt"),
-      Workout.find({ userId }).sort({ createdAt: 1 }).select("caloriesBurned createdAt"),
-      Diet.find({ userId }).sort({ createdAt: 1 }).select("totalProtein createdAt"),
+      Bodymeasurements.find({ userId })
+        .sort({ createdAt: 1 })
+        .select("weight bodyFat createdAt"),
+      Workout.find({ userId })
+        .sort({ createdAt: 1 })
+        .select("caloriesBurned createdAt"),
+      Diet.find({ userId })
+        .sort({ createdAt: 1 })
+        .select("totalProtein createdAt"),
     ]);
 
     const weightHistory = measurements.map((m) => ({
@@ -378,8 +423,9 @@ exports.dashboardStats = async (req, res) => {
     };
     const totalClients = await User.countDocuments(coachClientFilter);
     const clients = await User.find(coachClientFilter).lean();
-    const activeClientsCount = Array.isArray(clients)
-      ? clients.filter((client) => client.status === "active").length
+    const activeClientsCount =
+      Array.isArray(clients) ?
+        clients.filter((client) => client.status === "active").length
       : 0;
     const clientIds = clients.map((client) => client._id);
     const activePlans = await Plan.countDocuments({ coachId: req.user._id });
@@ -396,16 +442,16 @@ exports.dashboardStats = async (req, res) => {
           from: "plans",
           localField: "planId",
           foreignField: "_id",
-          as: "planDetails"
-        }
+          as: "planDetails",
+        },
       },
       {
-        $unwind: "$planDetails"
+        $unwind: "$planDetails",
       },
       {
         $match: {
           "planDetails.coachId": req.user._id,
-          status: { $in: ["active", "completed"] }
+          status: { $in: ["active", "completed"] },
         },
       },
       {
@@ -422,12 +468,11 @@ exports.dashboardStats = async (req, res) => {
       {
         $match: {
           status: { $in: ["active", "completed"] },
-          createdAt: { $gte: last30Days }
-        }
+          createdAt: { $gte: last30Days },
+        },
       },
       { $group: { _id: null, total: { $sum: "$price" } } },
     ]);
-
 
     if (redisClient && typeof redisClient.set === "function" && req.cacheKey) {
       try {
@@ -560,7 +605,7 @@ exports.getSessions = async (req, res) => {
       error: err.message,
     });
   }
-}
+};
 exports.getClientSessions = async (req, res) => {
   try {
     const sessions = await Session.find({ clientId: req.user._id })
@@ -578,10 +623,12 @@ exports.respondSession = async (req, res) => {
     const session = await Session.findOneAndUpdate(
       { _id: req.params.id, clientId: req.user._id, status: "pending" },
       { status: action },
-      { new: true }
+      { new: true },
     );
     if (!session)
-      return res.status(404).json({ success: false, message: "Session not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found" });
     res.status(200).json({ success: true, data: session });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -678,4 +725,4 @@ exports.deleteSessions = async (req, res) => {
       error: err.message,
     });
   }
-}
+};

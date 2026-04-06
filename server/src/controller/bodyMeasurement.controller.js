@@ -14,8 +14,8 @@ exports.createBodyMeasurement = async (req, res) => {
       forearms,
       biceps,
       bodyFat,
-      userId,
     } = req.body;
+
     const measurement = await bodyMeasurement.create({
       userId: req.user._id,
       weight,
@@ -29,6 +29,8 @@ exports.createBodyMeasurement = async (req, res) => {
       biceps,
       bodyFat,
     });
+    console.log("req.user", req.user);
+
     res.status(201).json({
       success: true,
       data: measurement,

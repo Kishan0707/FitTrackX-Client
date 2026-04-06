@@ -117,6 +117,7 @@ exports.logoutUser = (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
+    // console.log("backend data", user);
     res.status(200).json({
       success: true,
       data: user,

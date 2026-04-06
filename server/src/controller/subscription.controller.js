@@ -42,26 +42,50 @@ exports.subscribePlan = async (req, res) => {
 };
 exports.getMySubscription = async (req, res) => {
   try {
+    const user = await require("../models/user.model")
+      .findById(req.user._id)
+      .select("goal");
+
     const subscription = await Subscription.findOne({
       userId: req.user._id,
-      status: "active",
-    }).populate("planId");
+      status: { $in: ["active", "expired"] },
+    }).populate({
+      path: "planId",
+      populate: {
+        path: "coachId",
+        select: "name email",
+      },
+    });
+
     if (!subscription) {
       return res.status(404).json({
         success: false,
-        message: "No active subscription found",
+        message: "No subscription found",
       });
     }
+
+    // 🔥 Auto-expire logic
+    if (
+      subscription.endDate < new Date() &&
+      subscription.status !== "expired"
+    ) {
+      subscription.status = "expired";
+      await subscription.save();
+    }
+
+    
+
     res.status(200).json({
       success: true,
-      data: subscription,
+      data: {
+        ...subscription.toObject(),
+        userGoal: user?.goal,
+      },
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: err.message,
     });
   }
 };

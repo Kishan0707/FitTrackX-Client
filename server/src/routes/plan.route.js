@@ -2,7 +2,7 @@ const express = require("express");
 
 const router = express.Router();
 
-const planController = require("../controller/plan.cotroller");
+const planController = require("../controller/plan.controller.js");
 const { protect } = require("../middleware/auth.middleware");
 router.post("/create", protect, planController.createPlans);
 router.get("/my-plan", protect, planController.getAllPlans);
