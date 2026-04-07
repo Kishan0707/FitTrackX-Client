@@ -1,7 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/auth.middleware");
-const { sendMessage, getConversation, markSeen, getAllMessages } = require("../controller/message.controller");
+const {
+  sendMessage,
+  getConversation,
+  markSeen,
+  getAllMessages,
+} = require("../controller/message.controller");
 
 router.use(protect);
 

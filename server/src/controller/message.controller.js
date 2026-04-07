@@ -10,8 +10,9 @@ exports.sendMessage = async (req, res) => {
       message,
       seen: false,
     });
+    const populatedMessage = await msg.populate("sender", "name email");
 
-    getIO().to(receiverId.toString()).emit("receiveMessage", msg);
+    getIO().to(receiverId.toString()).emit("receiveMessage", populatedMessage);
 
     res.status(201).json({ success: true, data: msg });
   } catch (err) {
@@ -24,7 +25,9 @@ exports.getAllMessages = async (req, res) => {
     const me = req.user._id;
     const messages = await Message.find({
       $or: [{ sender: me }, { receiverId: me }],
-    }).sort("createdAt");
+    })
+      .populate("sender", "name email")
+      .sort("createdAt");
     res.json({ success: true, data: messages });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -41,7 +44,9 @@ exports.getConversation = async (req, res) => {
         { sender: me, receiverId: userId },
         { sender: userId, receiverId: me },
       ],
-    }).sort("createdAt");
+    })
+      .populate("sender", "name email")
+      .sort("createdAt");
 
     res.json({ success: true, data: messages });
   } catch (err) {
@@ -60,7 +65,9 @@ exports.markSeen = async (req, res) => {
       },
       { seen: true },
     );
-    getIO().to(userId.toString()).emit("messageSeen", { userId: req.user._id });
+    getIO()
+      .to(userId.toString())
+      .emit("messagesSeen", { userId: req.user._id });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
