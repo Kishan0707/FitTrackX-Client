@@ -40,6 +40,7 @@ exports.registerUser = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          goal: user.goal,
         },
       });
     }
@@ -79,6 +80,7 @@ exports.loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        goal: user.goal,
       },
     });
   } catch (err) {
