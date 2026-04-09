@@ -1,5 +1,5 @@
 const BodyMeasurement = require("../models/bodyMeasurement.model");
-const Workout = require("../models/workout.model");
+const { Workout } = require("../models/workout.model");
 const Diet = require("../models/diet.model");
 
 exports.progress = async (req, res) => {

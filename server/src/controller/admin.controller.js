@@ -1,5 +1,5 @@
 const User = require("../models/user.model");
-const Workout = require("../models/workout.model");
+const { Workout } = require("../models/workout.model");
 const Diet = require("../models/diet.model");
 const redisClient = require("../config/redis");
 const bcrypt = require("bcryptjs");

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { trim } = require("validator");
 
 const workoutSchema = new mongoose.Schema(
   {
@@ -58,8 +59,33 @@ const workoutSchema = new mongoose.Schema(
     ],
     status: {
       type: String,
-      enum: ["completed", "cancelled", "pending"],
+      enum: ["pending", "in_progress", "completed", "skipped", "cancelled"],
       default: "pending",
+    },
+    assignedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    completedAt: Date,
+    feedback: {
+      type: String,
+      trim: true,
+    },
+    completionNote: {
+      type: String,
+      trim: true,
+    },
+    scheduledFor: {
+      type: Date,
+      default: Date.now,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
     },
     caloriesBurned: {
       type: Number,
@@ -78,4 +104,35 @@ const workoutSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
-module.exports = mongoose.model("Workout", workoutSchema);
+
+const WorkoutHistorySchema = new mongoose.Schema({
+  workoutId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Workout",
+    required: true,
+  },
+  updatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  previousData: {
+    type: mongoose.Schema.Types.Mixed,
+    required: true,
+  },
+  changedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+const Workout = mongoose.model("Workout", workoutSchema);
+const WorkoutHistory =
+  mongoose.models.WorkoutHistory ||
+  mongoose.model("WorkoutHistory", WorkoutHistorySchema);
+
+module.exports = {
+  Workout,
+  WorkoutHistory,
+  WorkoutHistorySchema,
+};

@@ -1,5 +1,5 @@
 const PDFDocument = require("pdfkit");
-const Workout = require("../models/workout.model");
+const { Workout } = require("../models/workout.model");
 const Diet = require("../models/diet.model");
 
 exports.exportuserReport = async (req, res) => {

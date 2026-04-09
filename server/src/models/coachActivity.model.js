@@ -13,6 +13,8 @@ const coachActivitySchema = new mongoose.Schema(
         "client_assigned",
         "client_unassigned",
         "workout_created",
+        "workout_updated",
+        "workout_deleted",
         "diet_created",
         "session_completed",
         "profile_updated",
@@ -40,7 +42,7 @@ const coachActivitySchema = new mongoose.Schema(
       default: {},
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Index for faster queries

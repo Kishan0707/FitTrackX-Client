@@ -118,7 +118,18 @@ exports.logoutUser = (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user.id)
+      .select("-password")
+      .populate([
+        {
+          path: "assignedCoach",
+          select: "_id name email profilePicture specialization role",
+        },
+        {
+          path: "coachId",
+          select: "_id name email profilePicture specialization role",
+        },
+      ]);
     // console.log("backend data", user);
     res.status(200).json({
       success: true,

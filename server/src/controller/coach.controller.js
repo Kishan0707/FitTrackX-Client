@@ -1,14 +1,16 @@
 const User = require("../models/user.model");
-const Workout = require("../models/workout.model");
+const { Workout, WorkoutHistory } = require("../models/workout.model");
 const Bodymeasurements = require("../models/bodyMeasurement.model");
 const Diet = require("../models/diet.model");
 const Steps = require("../models/steps.model");
 const { Plan } = require("../models/plan.model");
 const redisClient = require("../config/redis");
+const notificationController = require("./notification.controller");
+const { sendEmail, emailTemplates, isEmailConfigured } = require("../config/email");
 const clients = require("../models/user.model");
 const Subscription = require("../models/subscription.model");
 const Session = require("../models/session.model");
-
+const CoachActivity = require("../models/coachActivity.model");
 exports.requestCoach = async (req, res) => {
   try {
     const { coachId, target } = req.body;
@@ -108,14 +110,103 @@ exports.getMyCoach = async (req, res) => {
 
 exports.assignWorkout = async (req, res) => {
   try {
-    const { userId, type, exercises } = req.body;
+    const { userId, type, title, duration, exercises } = req.body;
+    if (!title?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Title require",
+      });
+    }
+    if (!Array.isArray(exercises) || exercises.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one exercises required",
+      });
+    }
+    if (duration <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Duration must be greater then or 0",
+      });
+    }
+    const client = await User.findOne({
+      _id: userId,
+      $or: [{ assignedCoach: req.user._id }, { coachId: req.user._id }],
+    });
+    if (!client) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to assign workout to this user",
+      });
+    }
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    const existWorkout = await Workout.findOne({
+      userId,
+      title,
+      createdAt: {
+        $gte: startOfDay,
+        $lte: endOfDay,
+      },
+    });
+    if (existWorkout) {
+      return res.status(400).json({
+        success: false,
+        message: "this Workout already Assigned today",
+      });
+    }
     const workout = await Workout.create({
       userId,
+      coachId: req.user._id,
       type,
+      title,
       exercises,
+      duration,
       caloriesBurned: 0,
+      status: "pending",
+      assignedAt: new Date(),
+      scheduledFor: req.body.scheduledFor || new Date(),
     });
     // await workout.save();
+    await CoachActivity.create({
+      coachId: req.user._id,
+      activityType: "workout_created",
+      description: `Assigned ${title} workout to ${client.name}`,
+      relatedTo: {
+        type: "workout",
+        id: workout._id,
+      },
+    });
+    try {
+      const coachName = req.user?.name || "Your Coach";
+      await notificationController.createNotification(
+        userId,
+        "workout",
+        "New workout assigned",
+        `${coachName} assigned ${title} for ${
+          client.name || "you"
+        }. Check your workouts list.`,
+        "/workouts",
+      );
+    } catch (notificationErr) {
+      console.error("Notification failed:", notificationErr);
+    }
+    if (isEmailConfigured && client.email) {
+      try {
+        await sendEmail({
+          to: client.email,
+          subject: "Your coach assigned a new workout",
+          html: emailTemplates.workoutReminder(
+            client.name || "friend",
+            type || title || "workout",
+          ),
+        });
+      } catch (emailErr) {
+        console.error("Workout assignment email failed:", emailErr);
+      }
+    }
     res.status(200).json({
       success: true,
       message: "Workout assigned successfully",
@@ -126,6 +217,221 @@ exports.assignWorkout = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+exports.updateWorkout = async (req, res) => {
+  try {
+    const workout = await Workout.findOne({
+      _id: req.params.id,
+      isDeleted: false,
+    });
+    if (!workout) {
+      return res.status(400).json({
+        success: false,
+        message: "Workout not Found",
+      });
+    }
+    //Authorization
+    if (
+      req.user.role !== "admin" &&
+      workout.coachId.toString() !== req.user._id.toString()
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Not Authorized to update this workout",
+      });
+    }
+    await WorkoutHistory.create({
+      workoutId: workout._id,
+      updatedBy: req.user._id,
+      previousData: workout.toObject(),
+    });
+    const allowedFields = [
+      "title",
+      "type",
+      "duration",
+      "status",
+      "scheduledFor",
+      "feedback",
+      "completionNote",
+      "exercises",
+    ];
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        workout[field] = req.body[field];
+      }
+    });
+    if (!workout.title?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "title is required",
+      });
+    }
+    if (!Array.isArray(workout.exercises) || workout.exercises.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least One exercise required",
+      });
+    }
+    if (workout.duration <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Duration must be greater then 0",
+      });
+    }
+    await workout.save();
+    await CoachActivity.create({
+      coachId: req.user._id,
+      activityType: "workout_updated",
+      description: `updated workout "${workout.title}" `,
+      relatedTo: {
+        type: "workout",
+        id: workout._id,
+      },
+    });
+    res.status(200).json({
+      success: true,
+      message: "workout updated successfully",
+      data: workout,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+};
+exports.deletedWorkout = async (req, res) => {
+  try {
+    const workout = await Workout.findById(req.params.id);
+    if (!workout) {
+      return res.status(404).json({
+        success: false,
+        message: "workout not found",
+      });
+    }
+    if (
+      req.user.role !== "admin" &&
+      workout.coachId.toString() !== req.user._id.toString()
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Not Authorized",
+      });
+    }
+    await Workout.findByIdAndUpdate(req.params.id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+    });
+    res.status(200).json({
+      success: true,
+      message: "Workout deleted successfully",
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+};
+exports.getMyAssignedWorkouts = async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const workouts = await Workout.find({
+      userId: req.user._id,
+      isDeleted: false,
+    })
+      .populate("coachId", "name email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res
+      .status(200)
+      .json({ success: true, count: workouts.length, data: workouts });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+};
+exports.completeWorkout = async (req, res) => {
+  try {
+    const workout = await Workout.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        userId: req.user._id,
+        isDeleted: false,
+      },
+      {
+        status: "completed",
+        completedAt: new Date(),
+        feedback: req.body.feedback,
+        completionNote: req.body.completionNote,
+      },
+      { new: true },
+    );
+
+    if (!workout) {
+      return res.status(404).json({
+        success: false,
+        message: "Workout not found",
+      });
+    }
+
+    const clientName = req.user?.name || "Your client";
+    const coachUser = await User.findById(workout.coachId).select(
+      "name email",
+    );
+
+    res.status(200).json({
+      success: true,
+      data: workout,
+    });
+
+    if (coachUser) {
+      try {
+        await notificationController.createNotification(
+          coachUser._id,
+          "workout",
+          `${clientName} completed a workout`,
+          `${clientName} just marked "${workout.title}" as complete.`,
+          "/coach/workouts",
+        );
+      } catch (notificationErr) {
+        console.error("Completion notification failed:", notificationErr);
+      }
+      if (isEmailConfigured && coachUser.email) {
+        try {
+          await sendEmail({
+            to: coachUser.email,
+            subject: `${clientName} completed a workout`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #10b981;">Workout Completed</h2>
+                <p>Hi ${coachUser.name || "Coach"},</p>
+                <p>${clientName} just completed "${workout.title}".</p>
+                <p>Check the coach dashboard to review feedback.</p>
+              </div>
+            `,
+          });
+        } catch (emailErr) {
+          console.error("Completion email failed:", emailErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
       error: err.message,
     });
   }
@@ -647,7 +953,7 @@ exports.updateSession = async (req, res) => {
     }
 
     if (
-      req.user.role !== "admin" &&
+      req.user.role === "admin" &&
       session.coachId.toString() !== req.user._id.toString()
     ) {
       return res.status(401).json({
@@ -722,6 +1028,51 @@ exports.deleteSessions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
+exports.restoreWorkout = async (req, res) => {
+  try {
+    const workout = await Workout.findByIdAndUpdate(
+      req.params.id,
+      {
+        isDeleted: false,
+        deletedAt: null,
+      },
+      {
+        new: true,
+      },
+    );
+    res.json({
+      success: true,
+      data: workout,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+};
+exports.getCoachWorkouts = async (req, res) => {
+  try {
+    const workouts = await Workout.find({
+      coachId: req.user._id,
+      isDeleted: false,
+    })
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      data: workouts,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
       error: err.message,
     });
   }

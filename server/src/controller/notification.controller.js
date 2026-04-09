@@ -1,18 +1,52 @@
 const Notification = require("../models/notification.model");
+const User = require("../models/user.model");
 const { emitNotification } = require("../config/socket");
+const { sendEmail, emailTemplates, isEmailConfigured } = require("../config/email");
+
+const getNotificationSubject = (type, title) => {
+  switch (type) {
+    case "workout":
+      return `Workout update: ${title}`;
+    case "diet":
+      return `Diet alert: ${title}`;
+    case "goal":
+      return `Goal milestone: ${title}`;
+    case "subscription":
+      return `Subscription notice: ${title}`;
+    case "coach":
+      return `Coach message: ${title}`;
+    default:
+      return `FitTrack notification: ${title}`;
+  }
+};
 
 exports.createNotification = async (userId, type, title, message, link = null) => {
   try {
-    const notification = await Notification.create({
-      userId,
-      type,
-      title,
-      message,
-      link,
-    });
+    const [notification, user] = await Promise.all([
+      Notification.create({
+        userId,
+        type,
+        title,
+        message,
+        link,
+      }),
+      User.findById(userId).select("name email"),
+    ]);
 
     // Emit real-time notification
     emitNotification(userId.toString(), notification);
+
+    if (user?.email && isEmailConfigured) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: getNotificationSubject(type, title),
+          html: emailTemplates.notificationAlert(user.name || "Friend", title, message),
+        });
+      } catch (emailErr) {
+        console.error("Notification email failed:", emailErr);
+      }
+    }
 
     return notification;
   } catch (error) {

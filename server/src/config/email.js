@@ -102,6 +102,15 @@ const emailTemplates = {
       <p>Best regards,<br>The FitTrack Team</p>
     </div>
   `,
+  notificationAlert: (name, title, message) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #6366f1;">${title}</h2>
+      <p>Hi ${name},</p>
+      <p>${message}</p>
+      <p>Open the FitTrack dashboard to see the latest activity.</p>
+      <p>Best regards,<br>The FitTrack Team</p>
+    </div>
+  `,
 };
 
 module.exports = { sendEmail, emailTemplates, isEmailConfigured };

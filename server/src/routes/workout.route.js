@@ -31,6 +31,8 @@ router.post(
 );
 
 router.get("/", protect, cache("/workouts"), workoutController.getAllWorkouts);
+router.get("/analytics", protect, workoutController.workoutAnalytics);
+router.get("/summary/progress", protect, workoutController.getProgressSummary);
 
 // Clear cache on update
 router.put(

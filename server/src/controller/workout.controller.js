@@ -1,4 +1,4 @@
-const Workout = require("../models/workout.model");
+const { Workout } = require("../models/workout.model");
 const User = require("../models/user.model");
 
 exports.createWorkout = async (req, res) => {
@@ -300,6 +300,119 @@ exports.monthlySummary = async (req, res) => {
       },
     });
   } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.getProgressSummary = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const [totalAssigned, completedCount, pendingCount, inProgressCount] =
+      await Promise.all([
+        Workout.countDocuments({ userId, isDeleted: false }),
+        Workout.countDocuments({
+          userId,
+          status: "completed",
+          isDeleted: false,
+        }),
+        Workout.countDocuments({
+          userId,
+          status: "pending",
+          isDeleted: false,
+        }),
+        Workout.countDocuments({
+          userId,
+          status: "in_progress",
+          isDeleted: false,
+        }),
+      ]);
+
+    const completionRate =
+      totalAssigned === 0
+        ? 0
+        : Math.round((completedCount / totalAssigned) * 100);
+
+    const weeklyTrendDocs = await Workout.aggregate([
+      {
+        $match: {
+          userId,
+          isDeleted: false,
+          createdAt: { $gte: weekStart },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+          },
+          total: { $sum: 1 },
+          completed: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "completed"] }, 1, 0],
+            },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const trendMap = weeklyTrendDocs.reduce((acc, item) => {
+      acc[item._id] = item;
+      return acc;
+    }, {});
+
+    const weeklyTrend = [];
+    for (let i = 0; i < 7; i += 1) {
+      const dayDate = new Date(weekStart);
+      dayDate.setDate(weekStart.getDate() + i);
+      const iso = dayDate.toISOString().split("T")[0];
+      weeklyTrend.push({
+        day: dayDate.toLocaleDateString("en-US", { weekday: "short" }),
+        total: trendMap[iso]?.total || 0,
+        completed: trendMap[iso]?.completed || 0,
+      });
+    }
+
+    const nextWorkout = await Workout.findOne({
+      userId,
+      isDeleted: false,
+      scheduledFor: { $gte: now },
+    })
+      .sort({ scheduledFor: 1 })
+      .populate("coachId", "name")
+      .select("title scheduledFor status coachId");
+
+    const lastCompleted = await Workout.findOne({
+      userId,
+      status: "completed",
+      isDeleted: false,
+    })
+      .sort({ completedAt: -1 })
+      .select("title completedAt");
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalAssigned,
+        completedCount,
+        pendingCount,
+        inProgressCount,
+        completionRate,
+        nextWorkout,
+        lastCompleted,
+        weeklyTrend,
+      },
+    });
+  } catch (err) {
+    console.error("Progress summary error:", err);
     res.status(500).json({
       success: false,
       message: err.message,
