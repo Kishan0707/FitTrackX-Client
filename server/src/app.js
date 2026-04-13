@@ -43,7 +43,9 @@ const redis = require("./config/redis");
 const allowedOrigins = [
   "http://localhost:5173",
   "https://fit-track-x-clients.vercel.app",
+  "https://fittrackx-client.onrender.com", // if you call API from same domain later
 ];
+
 
 const isAllowedOrigin = (origin) => {
   if (!origin) return true;
