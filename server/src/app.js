@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const cookie = require("cookie-parser");
 const morgan = require("morgan");
+const productRoutes = require("./routes/product.route");
 
 const authRoutes = require("./routes/auth.route");
 const workoutRoutes = require("./routes/workout.route"); //
@@ -48,7 +49,8 @@ const isAllowedOrigin = (origin) => {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
   // allow all vercel preview deployments for this project
-  if (/^https:\/\/fit-track-x-clients.*\.vercel\.app$/.test(origin)) return true;
+  if (/^https:\/\/fit-track-x-clients.*\.vercel\.app$/.test(origin))
+    return true;
   return false;
 };
 app.use(
@@ -113,6 +115,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/steps", stepsRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/onboarding", onboardingRoutes);
+app.use("/api/products", productRoutes);
 
 //
 app.get("/", (req, res) => {
