@@ -1,30 +1,36 @@
 const nodemailer = require("nodemailer");
 
 // Check if email credentials are configured
-const isEmailConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASSWORD && 
-  process.env.EMAIL_USER !== 'your-actual-email@gmail.com';
+const isEmailConfigured =
+  process.env.EMAIL_USER &&
+  process.env.EMAIL_PASSWORD &&
+  process.env.EMAIL_USER !== "ahirk7317@gmail.com";
 
 let transporter = null;
 
 if (isEmailConfigured) {
   transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || "smtp.gmail.com",
-    port: process.env.EMAIL_PORT || 587,
+    host: "smtp.gmail.com",
+    port: 587,
     secure: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,
     },
   });
-  console.log('✅ Email service configured');
+  console.log("EMAIL CONFIG:", {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD ? "YES" : "NO",
+  });
+  console.log("✅ Email service configured");
 } else {
-  console.log('⚠️  Email service not configured - Email features disabled');
+  console.log("⚠️  Email service not configured - Email features disabled");
 }
 
 const sendEmail = async (options) => {
   if (!isEmailConfigured) {
-    console.log('⚠️  Email not sent - Email service not configured');
-    return { success: false, error: 'Email service not configured' };
+    console.log("⚠️  Email not sent - Email service not configured");
+    return { success: false, error: "Email service not configured" };
   }
 
   try {
@@ -35,11 +41,11 @@ const sendEmail = async (options) => {
       html: options.html,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions).catch(console.error);
     console.log("✅ Email sent:", info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("❌ Email error:", error.message);
+    console.error("❌ Email error:", error);
     return { success: false, error: error.message };
   }
 };

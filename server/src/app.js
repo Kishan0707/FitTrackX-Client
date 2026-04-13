@@ -46,7 +46,6 @@ const allowedOrigins = [
   "https://fittrackx-client.onrender.com", // if you call API from same domain later
 ];
 
-
 const isAllowedOrigin = (origin) => {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
