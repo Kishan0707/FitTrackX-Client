@@ -1,10 +1,59 @@
+const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
-
+const EmailOtp = require("../models/emailOtp");
+const { sendEmail } = require("../config/email");
 const generateToken = require("../utils/generateToken");
+
+const OTP_DURATION_MS = 10 * 60 * 1000;
+
+const createOtpCode = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
+const clearOtp = async (email) => {
+  await EmailOtp.deleteOne({ email });
+};
+
+const ensureOtpValid = async (email, otp) => {
+  const record = await EmailOtp.findOne({ email });
+  if (!record) {
+    throw new Error("OTP not requested for this email");
+  }
+  if (record.expiresAt < Date.now()) {
+    await clearOtp(email);
+    throw new Error("OTP has expired");
+  }
+
+  const isMatch = await bcrypt.compare(otp, record.otp);
+  if (!isMatch) {
+    throw new Error("OTP is incorrect");
+  }
+
+  record.verified = true;
+  await record.save();
+};
+
+const buildOtpMessage = (otp) => `
+  <div style="font-family: Arial, sans-serif; padding: 16px;">
+    <h2 style="color:#ef4444;">Your FitTrack verification code</h2>
+    <p>Enter the code below in the app to complete registration.</p>
+    <div style="font-size: 24px; letter-spacing: 6px; margin: 16px 0; font-weight: bold;">${otp}</div>
+    <p>This code expires in 10 minutes.</p>
+  </div>
+`;
 exports.registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, age, height, weight, goal, coachId } =
-      req.body;
+    const {
+      name,
+      email,
+      password,
+      role,
+      age,
+      height,
+      weight,
+      goal,
+      coachId,
+      otp,
+    } = req.body;
 
     const userExists = await User.findOne({
       email,
@@ -18,6 +67,21 @@ exports.registerUser = async (req, res) => {
     if (password.length < 6) {
       return res.status(400).json({
         message: "Password must be 6 characters",
+      });
+    }
+
+    if (!otp) {
+      return res
+        .status(400)
+        .json({ success: false, message: "OTP is required" });
+    }
+
+    try {
+      await ensureOtpValid(email, otp);
+    } catch (verificationErr) {
+      return res.status(400).json({
+        success: false,
+        message: verificationErr.message,
       });
     }
     const user = await User.create({
@@ -43,12 +107,85 @@ exports.registerUser = async (req, res) => {
           goal: user.goal,
         },
       });
+      await clearOtp(email);
     }
   } catch (err) {
     console.error(err);
     res.status(500).json({
       success: false,
       message: "Internal server error",
+    });
+  }
+};
+
+exports.sendRegistrationOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required for OTP",
+      });
+    }
+
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
+      });
+    }
+
+    const otpCode = createOtpCode();
+    const hashed = await bcrypt.hash(otpCode, 10);
+    const expiresAt = new Date(Date.now() + OTP_DURATION_MS);
+
+    await EmailOtp.findOneAndUpdate(
+      { email },
+      { email, otp: hashed, expiresAt, verified: false },
+      { upsert: true, new: true },
+    );
+
+    const emailResult = await sendEmail({
+      to: email,
+      subject: "FitTrack verification code",
+      html: buildOtpMessage(otpCode),
+    });
+
+    res.status(200).json({
+      success: true,
+      message:
+        emailResult.success ?
+          "OTP sent to your email"
+        : "OTP generated (email service disabled)",
+      expiresIn: OTP_DURATION_MS / 1000,
+    });
+  } catch (err) {
+    console.error("sendRegistrationOtp", err);
+    res.status(500).json({
+      success: false,
+      message: "Unable to send OTP",
+    });
+  }
+};
+
+exports.verifyRegistrationOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Both email and OTP are required",
+      });
+    }
+
+    await ensureOtpValid(email, otp);
+    await clearOtp(email);
+    res.status(200).json({ success: true, message: "OTP verified" });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      message: err.message,
     });
   }
 };
