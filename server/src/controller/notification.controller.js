@@ -1,7 +1,11 @@
 const Notification = require("../models/notification.model");
 const User = require("../models/user.model");
 const { emitNotification } = require("../config/socket");
-const { sendEmail, emailTemplates, isEmailConfigured } = require("../config/email");
+const {
+  sendEmail,
+  emailTemplates,
+  isEmailConfigured,
+} = require("../config/email");
 
 const getNotificationSubject = (type, title) => {
   switch (type) {
@@ -20,7 +24,13 @@ const getNotificationSubject = (type, title) => {
   }
 };
 
-exports.createNotification = async (userId, type, title, message, link = null) => {
+exports.createNotification = async (
+  userId,
+  type,
+  title,
+  message,
+  link = null,
+) => {
   try {
     const [notification, user] = await Promise.all([
       Notification.create({
@@ -41,7 +51,11 @@ exports.createNotification = async (userId, type, title, message, link = null) =
         await sendEmail({
           to: user.email,
           subject: getNotificationSubject(type, title),
-          html: emailTemplates.notificationAlert(user.name || "Friend", title, message),
+          html: emailTemplates.notificationAlert(
+            user.name || "Friend",
+            title,
+            message,
+          ),
         });
       } catch (emailErr) {
         console.error("Notification email failed:", emailErr);
@@ -78,7 +92,7 @@ exports.markAsRead = async (req, res) => {
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       { read: true },
-      { new: true }
+      { new: true },
     );
 
     if (!notification) {
@@ -104,7 +118,7 @@ exports.markAllAsRead = async (req, res) => {
   try {
     await Notification.updateMany(
       { userId: req.user._id, read: false },
-      { read: true }
+      { read: true },
     );
 
     res.status(200).json({

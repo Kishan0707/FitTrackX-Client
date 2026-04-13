@@ -28,6 +28,7 @@ const sessionRoutes = require("./routes/session.routes");
 const messageRoutes = require("./routes/message.route");
 const stepsRoutes = require("./routes/steps.route");
 const subscriptionRoutes = require("./routes/subscription.route");
+const onboardingRoutes = require("./routes/onboarding.route");
 const helmet = require("helmet");
 // const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss");
@@ -111,6 +112,7 @@ app.use("/api/sessions", sessionRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/steps", stepsRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/onboarding", onboardingRoutes);
 
 //
 app.get("/", (req, res) => {

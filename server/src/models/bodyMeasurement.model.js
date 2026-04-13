@@ -62,6 +62,11 @@ const bodyMeasurementSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    source: {
+      type: String,
+      enum: ["manual", "onboarding", "auto"],
+      default: "manual",
+    },
   },
   {
     timestamps: true,

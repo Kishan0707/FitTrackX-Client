@@ -190,15 +190,27 @@ const userSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
-      pushNotifications: {
-        type: Boolean,
-        default: false,
-      },
+    pushNotifications: {
+      type: Boolean,
+      default: false,
     },
-    resetPasswordToken: {
-      type: String,
-      default: null,
-    },
+  },
+  onboardingComplete: {
+    type: Boolean,
+    default: false,
+  },
+  onboardingData: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+  coachSuggestion: {
+    type: String,
+    default: null,
+  },
+  resetPasswordToken: {
+    type: String,
+    default: null,
+  },
     resetPasswordExpire: {
       type: Date,
       default: null,
