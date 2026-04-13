@@ -31,7 +31,6 @@ exports.sendWorkoutReminder = async (req, res) => {
       subject: "Workout Reminder",
       html: emailTemplates.workoutReminder(user.name, workoutType),
     });
-    if (!result.success) throw new Error("Failed to send email");
 
     res.status(200).json({
       success: true,

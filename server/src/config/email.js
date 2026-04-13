@@ -29,8 +29,7 @@ if (isEmailConfigured) {
 
 const sendEmail = async (options) => {
   if (!isEmailConfigured) {
-    console.log("⚠️  Email not sent - Email service not configured");
-    return { success: false, error: "Email service not configured" };
+    throw new Error("Email service not configured");
   }
 
   try {
@@ -41,12 +40,12 @@ const sendEmail = async (options) => {
       html: options.html,
     };
 
-    const info = await transporter.sendMail(mailOptions).catch(console.error);
+    const info = await transporter.sendMail(mailOptions);
     console.log("✅ Email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    return info;
   } catch (error) {
-    console.error("❌ Email error:", error);
-    return { success: false, error: error.message };
+    console.error("❌ FULL EMAIL ERROR:", error);
+    throw error; // 🔥 IMPORTANT
   }
 };
 
