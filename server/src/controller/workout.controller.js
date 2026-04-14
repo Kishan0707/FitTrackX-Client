@@ -612,42 +612,50 @@ exports.getUserWorkouts = async (req, res) => {
   }
 };
 
-exports.completedExercise = async (req, res) => {
+exports.completeExercise = async (req, res) => {
   try {
-    const { workoutId, exerciseName } = req.body;
+    const { workoutId, exerciseId } = req.body;
+
+    if (!workoutId || !exerciseId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing workoutId or exerciseId",
+      });
+    }
+
     const workout = await Workout.findById(workoutId);
+
     if (!workout) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "workout not found",
+        message: "Workout not found",
       });
     }
-    const exercise = workout.exercises.find((ex) => ex.name === exerciseName);
+
+    const exercise = workout.exercises.id(exerciseId);
+
     if (!exercise) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "exercise not found",
+        message: "Exercise not found",
       });
     }
+
     exercise.isCompleted = true;
     exercise.completedAt = new Date();
-    const allDone = await workout.exercises.every((ex) => ex.isCompleted);
-    if (allDone) {
-      workout.status = "completed";
-      workout.completedAt = new Date();
-    } else {
-      workout.status = "in_progress";
-    }
+
     await workout.save();
-    res.status(200).json({
+
+    res.json({
       success: true,
-      workout,
+      message: "Exercise completed",
+      data: workout,
     });
   } catch (err) {
-    console.log(err);
+    console.error("Complete exercise error:", err);
     res.status(500).json({
       success: false,
-      message: "Exercise completed time error",
+      message: err.message,
     });
   }
 };
