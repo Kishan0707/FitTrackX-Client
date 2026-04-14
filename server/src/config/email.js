@@ -7,9 +7,7 @@ let transporter = null;
 
 if (isEmailConfigured) {
   transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
+    service: "gmail", // instead of host/port
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,

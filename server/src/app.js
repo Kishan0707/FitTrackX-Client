@@ -81,6 +81,7 @@ app.use(
     },
   }),
 );
+app.set("trust proxy", 1);
 
 // Security Middleware
 app.use(helmet()); // Add Helmet for security headers
