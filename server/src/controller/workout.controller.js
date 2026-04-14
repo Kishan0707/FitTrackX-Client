@@ -568,7 +568,11 @@ exports.generateWorkoutPlan = async (req, res) => {
       coachId: req.user._id, // AI = self coach
       type: "home",
       title: `${goal} AI Workout`,
-      workout: workoutPlan.exercises,
+      exercises: workoutPlan.exercises.map((ex) => ({
+        name: ex.name,
+        sets: ex.sets || 3,
+        reps: ex.reps || 10,
+      })),
       status: "pending",
     });
 
@@ -630,7 +634,7 @@ exports.completedExercise = async (req, res) => {
     const allDone = await workout.exercises.every((ex) => ex.isCompleted);
     if (allDone) {
       workout.status = "completed";
-      workout.createdAt = new Date();
+      workout.completedAt = new Date();
     } else {
       workout.status = "in_progress";
     }
