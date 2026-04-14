@@ -39,7 +39,7 @@ const sendEmail = async (options) => {
 
     const info = await transporter.sendMail(mailOptions);
     console.log("✅ Email sent:", info.messageId);
-    return info;
+    return { success: true, info };
   } catch (error) {
     console.error("❌ FULL EMAIL ERROR:", error);
     throw error; // 🔥 IMPORTANT
