@@ -1,10 +1,7 @@
 const nodemailer = require("nodemailer");
 
 // Check if email credentials are configured
-const isEmailConfigured =
-  process.env.EMAIL_USER &&
-  process.env.EMAIL_PASSWORD &&
-  process.env.EMAIL_USER !== "ahirk7317@gmail.com";
+const isEmailConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASSWORD;
 
 let transporter = null;
 
