@@ -57,5 +57,5 @@ router.get(
   protect,
   workoutController.generateWeeklyWorkout,
 );
-
+router.post("/complete-exercise", workoutController.completedExercise);
 module.exports = router;

@@ -35,6 +35,7 @@ const workoutSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    exercise: String,
     exercises: [
       {
         name: {
@@ -54,6 +55,13 @@ const workoutSchema = new mongoose.Schema(
         },
         duration: {
           type: Number,
+        },
+        isCompleted: {
+          type: Boolean,
+          default: false,
+        },
+        completedAt: {
+          type: Date,
         },
       },
     ],

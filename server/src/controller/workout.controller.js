@@ -3,7 +3,8 @@ const User = require("../models/user.model");
 
 exports.createWorkout = async (req, res) => {
   try {
-    const { type, title, exercises, caloriesBurned, duration, userId } = req.body;
+    const { type, title, exercises, caloriesBurned, duration, userId } =
+      req.body;
 
     // Validate required fields
     if (!type) {
@@ -32,7 +33,7 @@ exports.createWorkout = async (req, res) => {
     console.log("Saved workout details:", {
       _id: workout._id,
       userId: workout.userId,
-      coachId: workout.coachId 
+      coachId: workout.coachId,
     });
 
     const user = await User.findById(workoutData.userId);
@@ -82,7 +83,12 @@ exports.getAllWorkouts = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
 
-    console.log("Fetching workouts for user:", req.user._id, "Role:", req.user.role);
+    console.log(
+      "Fetching workouts for user:",
+      req.user._id,
+      "Role:",
+      req.user.role,
+    );
 
     // If user is a coach, show workouts they created (where coachId = their ID)
     // If user is a regular user, show workouts assigned to them or created for them
@@ -96,7 +102,10 @@ exports.getAllWorkouts = async (req, res) => {
       console.log("User query:", query);
     }
 
-    if ((req.user.role === "coach" || req.user.role === "admin") && req.query.userId) {
+    if (
+      (req.user.role === "coach" || req.user.role === "admin") &&
+      req.query.userId
+    ) {
       query.userId = req.query.userId;
     }
 
@@ -107,8 +116,22 @@ exports.getAllWorkouts = async (req, res) => {
       .limit(limit);
 
     const totalCount = await Workout.countDocuments(query);
-    console.log("Workouts found:", workouts.length, "Total in DB with query:", totalCount);
-    console.log("Sample workout:", workouts[0] ? { _id: workouts[0]._id, userId: workouts[0].userId, coachId: workouts[0].coachId } : "none");
+    console.log(
+      "Workouts found:",
+      workouts.length,
+      "Total in DB with query:",
+      totalCount,
+    );
+    console.log(
+      "Sample workout:",
+      workouts[0] ?
+        {
+          _id: workouts[0]._id,
+          userId: workouts[0].userId,
+          coachId: workouts[0].coachId,
+        }
+      : "none",
+    );
 
     res.status(200).json({
       success: true,
@@ -169,7 +192,12 @@ exports.deleteWorkout = async (req, res) => {
     console.log("User ID:", req.user._id);
 
     const workout = await Workout.findById(req.params.id);
-    console.log("Workout found:", workout ? { _id: workout._id, userId: workout.userId, coachId: workout.coachId } : "NOT FOUND");
+    console.log(
+      "Workout found:",
+      workout ?
+        { _id: workout._id, userId: workout.userId, coachId: workout.coachId }
+      : "NOT FOUND",
+    );
 
     if (!workout) {
       return res.status(404).json({
@@ -180,7 +208,8 @@ exports.deleteWorkout = async (req, res) => {
 
     // Allow deletion if user is the one the workout is assigned to OR the coach/admin who created it
     const userIdMatch = workout.userId?.toString() === req.user._id.toString();
-    const coachIdMatch = workout.coachId?.toString() === req.user._id.toString();
+    const coachIdMatch =
+      workout.coachId?.toString() === req.user._id.toString();
 
     console.log("userIdMatch:", userIdMatch, "coachIdMatch:", coachIdMatch);
 
@@ -336,9 +365,9 @@ exports.getProgressSummary = async (req, res) => {
       ]);
 
     const completionRate =
-      totalAssigned === 0
-        ? 0
-        : Math.round((completedCount / totalAssigned) * 100);
+      totalAssigned === 0 ? 0 : (
+        Math.round((completedCount / totalAssigned) * 100)
+      );
 
     const weeklyTrendDocs = await Workout.aggregate([
       {
@@ -534,10 +563,18 @@ exports.generateWorkoutPlan = async (req, res) => {
         { name: "Plank", sets: 3, time: "30s", rest: "60s" },
       ],
     };
+    const workout = await Workout.create({
+      userId: req.user._id,
+      coachId: req.user._id, // AI = self coach
+      type: "home",
+      title: `${goal} AI Workout`,
+      workout: workoutPlan.exercises,
+      status: "pending",
+    });
 
     res.status(200).json({
       success: true,
-      data: workoutPlan,
+      data: workout,
     });
   } catch (err) {
     res.status(500).json({
@@ -567,6 +604,46 @@ exports.getUserWorkouts = async (req, res) => {
     res.status(500).json({
       success: false,
       message: err.message,
+    });
+  }
+};
+
+exports.completedExercise = async (req, res) => {
+  try {
+    const { workoutId, exerciseName } = req.body;
+    const workout = await Workout.findById(workoutId);
+    if (!workout) {
+      return res.status(400).json({
+        success: false,
+        message: "workout not found",
+      });
+    }
+    const exercise = workout.exercises.find((ex) => ex.name === exerciseName);
+    if (!exercise) {
+      return res.status(400).json({
+        success: false,
+        message: "exercise not found",
+      });
+    }
+    exercise.isCompleted = true;
+    exercise.completedAt = new Date();
+    const allDone = await workout.exercises.every((ex) => ex.isCompleted);
+    if (allDone) {
+      workout.status = "completed";
+      workout.createdAt = new Date();
+    } else {
+      workout.status = "in_progress";
+    }
+    await workout.save();
+    res.status(200).json({
+      success: true,
+      workout,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      success: false,
+      message: "Exercise completed time error",
     });
   }
 };
