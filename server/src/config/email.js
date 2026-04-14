@@ -1,46 +1,21 @@
-const nodemailer = require("nodemailer");
+import { Resend } from "resend";
 
-// Check if email credentials are configured
-const isEmailConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASSWORD;
-
-let transporter = null;
-
-if (isEmailConfigured) {
-  transporter = nodemailer.createTransport({
-    service: "gmail", // instead of host/port
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-  console.log("EMAIL CONFIG:", {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD ? "YES" : "NO",
-  });
-  console.log("✅ Email service configured");
-} else {
-  console.log("⚠️  Email service not configured - Email features disabled");
-}
-
-const sendEmail = async (options) => {
-  if (!isEmailConfigured) {
-    throw new Error("Email service not configured");
-  }
-
+const resend = new Resend(process.env.RESEND_API_KEY);
+const isEmailConfigured = !!process.env.RESEND_API_KEY;
+const sendEmail = async ({ to, subject, html }) => {
   try {
-    const mailOptions = {
-      from: `${process.env.EMAIL_FROM_NAME || "FitTrack"} <${process.env.EMAIL_USER}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-    };
+    const response = await resend.emails.send({
+      from: "FitTrack <onboarding@resend.dev>",
+      to,
+      subject,
+      html,
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent:", info.messageId);
-    return { success: true, info };
+    console.log("✅ Email sent:", response);
+    return { success: true };
   } catch (error) {
-    console.error("❌ FULL EMAIL ERROR:", error);
-    throw error; // 🔥 IMPORTANT
+    console.error("❌ Email error:", error);
+    throw error;
   }
 };
 
