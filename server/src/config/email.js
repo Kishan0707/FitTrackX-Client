@@ -6,7 +6,7 @@ const sendEmail = async ({ to, subject, html }) => {
   try {
     const response = await resend.emails.send({
       from: "FitTrack <onboarding@resend.dev>",
-      to,
+      to: "kmpupleta@gmail.com",
       subject,
       html,
     });
