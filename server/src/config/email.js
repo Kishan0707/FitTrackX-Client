@@ -5,7 +5,7 @@ const isEmailConfigured = !!process.env.RESEND_API_KEY;
 const sendEmail = async ({ to, subject, html }) => {
   try {
     const response = await resend.emails.send({
-      from: "FitTrack <onboarding@resend.dev>",
+      from: "FitTrack <noreply@fittrackx.site>",
       to,
       subject,
       html,
