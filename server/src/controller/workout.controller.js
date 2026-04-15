@@ -565,7 +565,7 @@ exports.generateWorkoutPlan = async (req, res) => {
     };
     const workout = await Workout.create({
       userId: req.user._id,
-      coachId: req.user._id, // AI = self coach
+      coachId: req.user._id,
       type: "home",
       title: `${goal} AI Workout`,
       exercises: workoutPlan.exercises.map((ex) => ({
@@ -615,7 +615,7 @@ exports.getUserWorkouts = async (req, res) => {
 exports.completeExercise = async (req, res) => {
   try {
     const { workoutId, exerciseId } = req.body;
-
+    console.log("BODY RECEIVED:", req.body);
     if (!workoutId || !exerciseId) {
       return res.status(400).json({
         success: false,

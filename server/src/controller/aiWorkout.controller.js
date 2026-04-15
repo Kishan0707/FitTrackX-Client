@@ -1,4 +1,56 @@
-exports.getAiWorkout = (req, res) => {
+const AiWorkoutPlan = require("../models/aiWorkoutPlan.model");
+
+const normalizeExercises = (exercises) => {
+  if (!Array.isArray(exercises)) return [];
+
+  return exercises
+    .map((ex) => {
+      if (!ex) return null;
+
+      if (typeof ex === "string") {
+        const name = ex.trim();
+        if (!name) return null;
+        return { name, sets: 3, reps: 10 };
+      }
+
+      const name = String(ex.name || ex.exercise || ex.title || "").trim();
+      if (!name) return null;
+
+      const sets = Number.isFinite(Number(ex.sets)) ? Number(ex.sets) : 3;
+      const reps = Number.isFinite(Number(ex.reps)) ? Number(ex.reps) : 10;
+
+      return {
+        name,
+        sets,
+        reps,
+        video: ex.video ? String(ex.video) : undefined,
+        isCompleted: Boolean(ex.isCompleted),
+      };
+    })
+    .filter(Boolean);
+};
+
+const normalizeDays = (workoutPlan) => {
+  if (!Array.isArray(workoutPlan)) return [];
+
+  return workoutPlan
+    .map((day, index) => {
+      if (!day) return null;
+
+      const normalizedDay = String(day.day ?? index + 1).trim();
+      const workout = String(day.workout || day.title || "Workout").trim();
+
+      return {
+        day: normalizedDay || String(index + 1),
+        workout: workout || "Workout",
+        image: day.image ? String(day.image) : undefined,
+        exercises: normalizeExercises(day.exercises),
+      };
+    })
+    .filter(Boolean);
+};
+
+exports.getAiWorkout = async (req, res) => {
   try {
     const { goal, experience } = req.body;
     let WorkoutPlan = [];
@@ -95,6 +147,7 @@ exports.getAiWorkout = (req, res) => {
               "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400",
           },
         ];
+      } else if (goal === "strength") {
         // Generate workout for strength training beginner
         WorkoutPlan = [
           {
@@ -604,13 +657,89 @@ exports.getAiWorkout = (req, res) => {
       }
     }
 
-    res.status(200).json({
+    const days = normalizeDays(WorkoutPlan);
+
+    // If the request is authenticated, persist the generated plan for the user.
+    if (req.user && req.user._id) {
+      const savedPlan = await AiWorkoutPlan.create({
+        userId: req.user._id,
+        goal,
+        experience,
+        days,
+      });
+
+      return res.status(200).json({
+        success: true,
+        saved: true,
+        message: "AI Workout generated and saved",
+        data: { planId: savedPlan._id, days: savedPlan.days },
+      });
+    }
+
+    return res.status(200).json({
       success: true,
+      saved: false,
       message: "AI Workout generated",
-      data: WorkoutPlan,
+      data: { days },
     });
   } catch (err) {
     res.status(500).json({
+      success: false,
+      message: err.message,
+      error: "Server Error" + err.message,
+    });
+  }
+};
+
+exports.completeExercise = async (req, res) => {
+  try {
+    const { planId, dayId, exerciseId } = req.body || {};
+
+    if (!planId || !dayId || !exerciseId) {
+      return res.status(400).json({
+        success: false,
+        message: "planId, dayId and exerciseId are required",
+      });
+    }
+
+    const plan = await AiWorkoutPlan.findOne({
+      _id: planId,
+      userId: req.user._id,
+    });
+
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        message: "Plan not found",
+      });
+    }
+
+    const day = plan.days.id(dayId);
+    if (!day) {
+      return res.status(404).json({
+        success: false,
+        message: "Day not found",
+      });
+    }
+
+    const exercise = day.exercises.id(exerciseId);
+    if (!exercise) {
+      return res.status(404).json({
+        success: false,
+        message: "Exercise not found",
+      });
+    }
+
+    exercise.isCompleted = true;
+    await plan.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Exercise marked as completed",
+      data: { planId, dayId, exerciseId },
+    });
+  } catch (err) {
+    return res.status(500).json({
       success: false,
       message: err.message,
       error: "Server Error" + err.message,
