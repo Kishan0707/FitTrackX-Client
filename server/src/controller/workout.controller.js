@@ -622,6 +622,7 @@ exports.completeExercise = async (req, res) => {
         message: "Missing workoutId or exerciseId",
       });
     }
+    console.log("BODY:", req.body);
 
     const workout = await Workout.findById(workoutId);
 
