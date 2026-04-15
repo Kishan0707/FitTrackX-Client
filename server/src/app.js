@@ -22,6 +22,9 @@ const pdfRoutes = require("./routes/pdf.route");
 const loggerTestRoutes = require("./routes/loggerTest.route");
 const settingsRoutes = require("./routes/settings.route");
 const emailRoutes = require("./routes/email.route");
+const cartRoutes = require("./routes/cart.route");
+const sellerRoutes = require("./routes/seller.route");
+const affiliateRoutes = require("./routes/affiliate.routes");
 const exportRoutes = require("./routes/export.route");
 const orderRoutes = require("./routes/order.route");
 const notificationRoutes = require("./routes/notification.route");
@@ -118,9 +121,12 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/steps", stepsRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/onboarding", onboardingRoutes);
-app.use("/api/products", productRoutes);
 
+app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/seller", sellerRoutes);
+app.use("/api/affiliate", affiliateRoutes);
 //
 app.get("/", (req, res) => {
   res.send("FitTrack X API Running 🚀");

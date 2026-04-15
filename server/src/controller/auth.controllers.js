@@ -121,6 +121,17 @@ exports.registerUser = async (req, res) => {
 exports.sendRegistrationOtp = async (req, res) => {
   try {
     const { email } = req.body;
+    const allowedDomains = ["gmail.com", "yahoo.com"];
+
+    const domain = email.split("@")[1];
+    if (!allowedDomains.includes(domain)) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Only Gmail and Yahoo emails are allowed",
+        });
+    }
     if (!email) {
       return res.status(400).json({
         success: false,
