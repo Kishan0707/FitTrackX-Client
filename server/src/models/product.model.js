@@ -24,6 +24,32 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    category: [],
+    createdBy: {
+      type: String,
+      enum: ["coach", "admin"],
+    },
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
+    commissionPercent: {
+      type: Number,
+      default: 0,
+    },
+    commissionAmount: {
+      type: Number,
+      default: 0,
+    },
+    affiliateEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    sellerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     gstRate: {
       type: Number,
       default: 18,

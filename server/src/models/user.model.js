@@ -24,9 +24,12 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "coach", "admin"],
+      enum: ["user", "coach", "admin", "seller", "affiliate"],
       default: "user",
     },
+    isVerified: Boolean,
+    walletBalance: Number,
+    referralCode: String,
     age: Number,
     height: Number,
     weight: Number,
@@ -190,27 +193,27 @@ const userSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
-    pushNotifications: {
+      pushNotifications: {
+        type: Boolean,
+        default: false,
+      },
+    },
+    onboardingComplete: {
       type: Boolean,
       default: false,
     },
-  },
-  onboardingComplete: {
-    type: Boolean,
-    default: false,
-  },
-  onboardingData: {
-    type: mongoose.Schema.Types.Mixed,
-    default: null,
-  },
-  coachSuggestion: {
-    type: String,
-    default: null,
-  },
-  resetPasswordToken: {
-    type: String,
-    default: null,
-  },
+    onboardingData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    coachSuggestion: {
+      type: String,
+      default: null,
+    },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
     resetPasswordExpire: {
       type: Date,
       default: null,
