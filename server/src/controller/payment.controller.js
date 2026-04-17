@@ -237,7 +237,7 @@ exports.stripeWebhook = async (req, res) => {
     const sig = req.headers["stripe-signature"];
 
     event = stripe.webhooks.constructEvent(
-      req.body,
+      req.body, // 🔥 raw buffer
       sig,
       process.env.STRIPE_WEBHOOK_SECRET,
     );
@@ -246,88 +246,7 @@ exports.stripeWebhook = async (req, res) => {
     return res.sendStatus(400);
   }
 
-  // =====================================================
-  // 🎯 HANDLE SUCCESS PAYMENT
-  // =====================================================
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
+  console.log("🔥 WEBHOOK VERIFIED");
 
-    const { productId, planId, userId } = session.metadata;
-
-    try {
-      // =====================================================
-      // 🛒 PRODUCT FLOW (ORDER CREATE)
-      // =====================================================
-      if (productId) {
-        const existingOrder = await Order.findOne({
-          stripeSessionId: session.id,
-        });
-
-        if (existingOrder) {
-          console.log("⚠️ Duplicate order skipped");
-          return res.json({ received: true });
-        }
-
-        const product = await Product.findById(productId);
-
-        const deliveryDate = new Date();
-        deliveryDate.setDate(deliveryDate.getDate() + 5);
-
-        await Order.create({
-          userId,
-          productId,
-          sellerId: product.sellerId || product.coach,
-          price: product.finalPrice,
-          stripeSessionId: session.id,
-          estimatedDelivery: deliveryDate,
-          statusHistory: [{ status: "pending" }],
-        });
-
-        console.log("✅ Order created from webhook");
-      }
-
-      // =====================================================
-      // 📦 PLAN FLOW (SUBSCRIPTION CREATE)
-      // =====================================================
-      if (planId) {
-        const existingSub = await Subscription.findOne({
-          paymentId: session.payment_intent,
-        });
-
-        if (existingSub) {
-          console.log("⚠️ Duplicate subscription skipped");
-          return res.json({ received: true });
-        }
-
-        const plan = await Plan.findById(planId);
-
-        // 🔥 cancel old active subscriptions
-        await Subscription.updateMany(
-          { userId, status: "active" },
-          { status: "cancelled" },
-        );
-
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + plan.duration);
-
-        await Subscription.create({
-          userId,
-          planId,
-          plan: plan.title,
-          startDate: new Date(),
-          endDate,
-          price: plan.price,
-          amount: plan.price,
-          paymentId: session.payment_intent,
-          status: "active",
-        });
-
-        console.log("✅ Subscription created from webhook");
-      }
-    } catch (err) {
-      console.log("Webhook processing error:", err);
-    }
-  }
-
-  res.json({ received: true });
+  // rest logic...
 };
