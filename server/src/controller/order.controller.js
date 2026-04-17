@@ -9,8 +9,9 @@ exports.createOrder = async (req, res) => {
     const { productId, referralCode } = req.body;
     const userId = req.user._id;
 
-    // 🔥 product
+    // 🔥 get product
     const product = await Product.findById(productId);
+
     if (!product || product.status !== "verified") {
       return res.status(400).json({
         success: false,
@@ -18,26 +19,28 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // 🔥 seller
     const sellerId = product.sellerId || product.coach;
 
-    // 🔥 affiliate optional
+    // 🔥 affiliate
     let affiliate = null;
     if (referralCode) {
       affiliate = await Affiliate.findOne({ referralCode });
     }
 
-    // 🔥 calculations
+    // 🔥 pricing
     const price = product.finalPrice;
     const gstAmount = (product.gstRate / 100) * price;
 
     let commissionAmount = 0;
-
     if (affiliate && product.affiliateEnabled) {
       commissionAmount = (product.commissionPercent / 100) * price;
     }
 
     const totalAmount = price + gstAmount;
+
+    // ✅ FIX: delivery date
+    const deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + 5);
 
     // 🔥 create order
     const order = await Order.create({
@@ -49,6 +52,8 @@ exports.createOrder = async (req, res) => {
       gstAmount,
       commissionAmount,
       totalAmount,
+      estimatedDelivery: deliveryDate, // ✅ correct
+      statusHistory: [{ status: "pending" }],
     });
 
     // 🔥 affiliate update
@@ -72,7 +77,6 @@ exports.createOrder = async (req, res) => {
       );
     }
 
-    // ✅ ALWAYS RETURN RESPONSE
     res.status(201).json({
       success: true,
       message: "Order created successfully",
@@ -86,7 +90,6 @@ exports.createOrder = async (req, res) => {
     });
   }
 };
-
 exports.getMyOrder = async (req, res) => {
   try {
     const orders = await Order.find({
@@ -100,12 +103,17 @@ exports.getMyOrder = async (req, res) => {
       orders,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
   }
 };
 exports.getSellerOrders = async (req, res) => {
   try {
-    const Orders = await Order.find({ sellerId: req.user._id })
+    const orders = await Order.find({
+      sellerId: req.user._id,
+    })
       .populate("productId userId")
       .sort({ createdAt: -1 });
 
@@ -114,7 +122,6 @@ exports.getSellerOrders = async (req, res) => {
       orders,
     });
   } catch (err) {
-    console.log(err);
     res.status(500).json({
       success: false,
       error: err.message,
@@ -125,28 +132,63 @@ exports.getSellerOrders = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const orders = await Order.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-      },
-      { new: true },
-    );
-    if (!orders.length) {
-      return res.status(400).json({
-        success: false,
-        message: "order not updated",
+
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
       });
     }
+
+    // 🔐 SECURITY CHECK
+    if (order.sellerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Not authorized",
+      });
+    }
+
+    order.status = status;
+
+    order.statusHistory.push({
+      status,
+      date: new Date(),
+    });
+
+    await order.save();
+
     res.json({
       success: true,
-      orders,
+      order,
     });
   } catch (err) {
-    console.log(err);
     res.status(500).json({
-      success: false,
       error: err.message,
     });
+  }
+};
+exports.getSingleOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate("productId");
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    // 🔐 Only owner or seller can see
+    if (
+      order.userId.toString() !== req.user._id.toString() &&
+      order.sellerId.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        message: "Not authorized",
+      });
+    }
+
+    res.json({ order });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };

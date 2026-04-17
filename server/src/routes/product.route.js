@@ -12,6 +12,7 @@ router.get(
   authorizeRoles("admin"),
   productController.getPendingProducts,
 );
+router.get("/:id", protect, productController.getSingleProduct);
 router.patch(
   "/:id/verify",
   protect,

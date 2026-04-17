@@ -1,3 +1,4 @@
+
 const { Plan } = require("../models/plan.model");
 const Subscription = require("../models/subscription.model");
 const User = require("../models/user.model");
@@ -388,4 +389,59 @@ exports.assignPlanToClient = async (req, res) => {
       error: err.message,
     });
   }
+};
+exports.stripeWebhook = async (req, res) => {
+  let event;
+
+  try {
+    const sig = req.headers["stripe-signature"];
+
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET,
+    );
+  } catch (err) {
+    console.log("Webhook error:", err.message);
+    return res.sendStatus(400);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+
+    const { planId, userId } = session.metadata;
+
+    try {
+      const plan = await Plan.findById(planId);
+
+      if (!plan) return;
+
+      // 🔥 CANCEL OLD SUBSCRIPTIONS
+      await Subscription.updateMany(
+        { userId, status: "active", planId: { $ne: plan._id } },
+        { status: "cancelled" },
+      );
+
+      // 🔥 CREATE NEW SUBSCRIPTION
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + plan.duration);
+
+      await Subscription.create({
+        userId,
+        planId: plan._id,
+        plan: plan.title,
+        startDate: new Date(),
+        endDate,
+        price: plan.price,
+        amount: plan.price,
+        status: "active",
+      });
+
+      console.log("✅ Subscription Activated");
+    } catch (err) {
+      console.log("Subscription error:", err);
+    }
+  }
+
+  res.json({ received: true });
 };

@@ -14,5 +14,6 @@ router.get("/seller", protect, orderController.getSellerOrders);
 
 // update status
 router.put("/:id", protect, orderController.updateOrderStatus);
+router.get("/:id", protect, orderController.getSingleOrder);
 
 module.exports = router;

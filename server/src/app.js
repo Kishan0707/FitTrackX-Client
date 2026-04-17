@@ -74,6 +74,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+app.use("/api/payment/webhook", express.raw({ type: "application/json" }));
+app.use("/api/payment", paymentRoutes);
 app.use(express.json());
 app.use(cookie());
 app.use(
@@ -107,7 +109,7 @@ app.use("/api/stats", statisticsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/coach", coachRoutes);
 app.use("/api/plans", planRoutes);
-app.use("/api/payment", paymentRoutes);
+
 app.use("/api/ai", aiWorkoutRoutes);
 app.use("/api/pdf", pdfRoutes);
 app.use("/api/logger", loggerTestRoutes);

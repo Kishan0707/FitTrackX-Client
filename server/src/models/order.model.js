@@ -27,8 +27,25 @@ const orderSchema = new mongoose.Schema(
     total: Number,
     status: {
       type: String,
-      enum: ["padding", "shipped", "delivered", "cancelled"],
-      default: "padding",
+      enum: [
+        "pending",
+        "confirmed",
+        "shipped",
+        "out_for_delivery",
+        "delivered",
+      ],
+      default: "pending",
+    },
+    statusHistory: [
+      {
+        status: String,
+        date: { type: Date, default: Date.now },
+      },
+    ],
+    estimatedDelivery: Date,
+    stripeSessionId: {
+      type: String,
+      unique: true,
     },
   },
   {

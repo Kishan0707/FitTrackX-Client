@@ -1,43 +1,51 @@
 const { Plan } = require("../models/plan.model");
 const Subscription = require("../models/subscription.model");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 exports.subscribePlan = async (req, res) => {
   try {
     const { planId } = req.body;
+
     const plan = await Plan.findById(planId);
+
     if (!plan) {
       return res.status(404).json({
         success: false,
         message: "Plan not found",
       });
     }
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + plan.duration);
-    const subscription = await Subscription.create({
-      userId: req.user._id,
-      planId,
-      plan: plan.title,
-      startDate: new Date(),
-      endDate,
-      price: plan.price,
-      amount: plan.price,
-      status: "active",
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+
+      line_items: [
+        {
+          price_data: {
+            currency: "inr",
+            product_data: {
+              name: plan.title,
+            },
+            unit_amount: plan.price * 100,
+          },
+          quantity: 1,
+        },
+      ],
+
+      metadata: {
+        planId: plan._id.toString(),
+        userId: req.user._id.toString(),
+      },
+
+      success_url: `${process.env.CLIENT_URL}/success`,
+      cancel_url: `${process.env.CLIENT_URL}/cancel`,
     });
-    if (subscription.endDate < new Date()) {
-      subscription.status = "expired";
-      await subscription.save();
-    }
-    res.status(200).json({
+
+    res.json({
       success: true,
-      message: "Subscription successfully purches",
-      data: subscription,
+      sessionId: session.id,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: err.message,
-    });
+    res.status(500).json({ error: err.message });
   }
 };
 exports.getMySubscription = async (req, res) => {
@@ -72,8 +80,6 @@ exports.getMySubscription = async (req, res) => {
       subscription.status = "expired";
       await subscription.save();
     }
-
-    
 
     res.status(200).json({
       success: true,
