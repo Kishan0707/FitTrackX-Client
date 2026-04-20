@@ -1,9 +1,9 @@
 //server.js
 require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
-const app = require("./app");
-const connectDB = require("./config/db");
+const app = require("./app.js");
+const connectDB = require("./config/db.js");
 const http = require("http");
-const { initializeSocket } = require("./config/socket");
+const { initializeSocket } = require("./config/socket.js");
 
 const PORT = Number(process.env.PORT) || 5000;
 
