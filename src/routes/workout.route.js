@@ -5,6 +5,7 @@ const cache = require("../middleware/cache.middleware");
 const redisClient = require("../config/redis");
 const express = require("express");
 const router = express.Router();
+const { ROLES } = require("../constants/roles");
 
 // Middleware to clear cache
 const clearWorkoutCache = async (req, res, next) => {
@@ -25,19 +26,36 @@ const clearWorkoutCache = async (req, res, next) => {
 router.post(
   "/",
   protect,
-  authorizeRoles("user", "coach", "admin"),
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
   clearWorkoutCache,
   workoutController.createWorkout,
 );
 
-router.get("/", protect, cache("/workouts"), workoutController.getAllWorkouts);
-router.get("/analytics", protect, workoutController.workoutAnalytics);
-router.get("/summary/progress", protect, workoutController.getProgressSummary);
+router.get(
+  "/",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
+  cache("/workouts"),
+  workoutController.getAllWorkouts,
+);
+router.get(
+  "/analytics",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
+  workoutController.workoutAnalytics,
+);
+router.get(
+  "/summary/progress",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
+  workoutController.getProgressSummary,
+);
 
 // Clear cache on update
 router.put(
   "/:id",
   protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
   clearWorkoutCache,
   workoutController.updateWorkouts,
 );
@@ -46,16 +64,33 @@ router.put(
 router.delete(
   "/:id",
   protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
   clearWorkoutCache,
   workoutController.deleteWorkout,
 );
 
-router.get("/summary/daily", protect, workoutController.dailySummary);
-router.get("/summary/weekly", protect, workoutController.weeklySummary);
+router.get(
+  "/summary/daily",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
+  workoutController.dailySummary,
+);
+router.get(
+  "/summary/weekly",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
+  workoutController.weeklySummary,
+);
 router.get(
   "/generate-weekly-plan",
   protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
   workoutController.generateWeeklyWorkout,
 );
-router.post("/complete-exercise", protect, workoutController.completeExercise);
+router.post(
+  "/complete-exercise",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.COACH, ROLES.ADMIN),
+  workoutController.completeExercise,
+);
 module.exports = router;

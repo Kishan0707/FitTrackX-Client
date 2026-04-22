@@ -27,7 +27,7 @@ const productSchema = new mongoose.Schema(
     category: [],
     createdBy: {
       type: String,
-      enum: ["coach", "admin"],
+      enum: ["coach", "seller", "admin"],
     },
     isApproved: {
       type: Boolean,

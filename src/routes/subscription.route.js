@@ -6,15 +6,32 @@ const router = express.Router();
 
 const { protect } = require("../middleware/auth.middleware");
 const { authorizeRoles } = require("../middleware/role.middleware");
-router.post("/subscribe", protect, Controller.subscribePlan);
-router.get("/my-subscription", protect, Controller.getMySubscription);
+const { ROLES } = require("../constants/roles");
+
+router.post(
+  "/subscribe",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.ADMIN),
+  Controller.subscribePlan,
+);
+router.get(
+  "/my-subscription",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.ADMIN),
+  Controller.getMySubscription,
+);
 router.post(
   "/assign",
   protect,
-  authorizeRoles("coach", "admin"),
+  authorizeRoles(ROLES.COACH, ROLES.ADMIN),
   planController.assignPlanToClient,
 );
 // router.delete("/unsubscribe", protect, Controller.unsubscribe);
-router.patch("/cancel/:id", protect, Controller.cancelSubscription);
+router.patch(
+  "/cancel/:id",
+  protect,
+  authorizeRoles(ROLES.USER, ROLES.ADMIN),
+  Controller.cancelSubscription,
+);
 
 module.exports = router;

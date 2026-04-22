@@ -1,4 +1,5 @@
 const Product = require("../models/product.model");
+const { ROLES } = require("../constants/roles");
 
 const calculateFinalAmounts = ({ originalPrice, discountPrice, gstRate }) => {
   const sellPrice =
@@ -14,10 +15,14 @@ const calculateFinalAmounts = ({ originalPrice, discountPrice, gstRate }) => {
 
 exports.createProduct = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "coach") {
-      return res
-        .status(403)
-        .json({ success: false, message: "Only coaches can add products" });
+    if (
+      !req.user ||
+      ![ROLES.COACH, ROLES.SELLER, ROLES.ADMIN].includes(req.user.role)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Only coach, seller, or admin can add products",
+      });
     }
 
     const {
@@ -45,6 +50,11 @@ exports.createProduct = async (req, res) => {
 
     const product = await Product.create({
       coach: req.user._id,
+      sellerId: req.user.role === ROLES.SELLER ? req.user._id : null,
+      createdBy:
+        req.user.role === ROLES.ADMIN ? ROLES.ADMIN
+        : req.user.role === ROLES.SELLER ? ROLES.SELLER
+        : ROLES.COACH,
       name,
       description,
       originalPrice,
@@ -67,12 +77,14 @@ exports.createProduct = async (req, res) => {
 };
 
 const buildFilter = (req) => {
-  const baseFilter = {};
-  if (req.user?.role === "admin") {
+  if (req.user?.role === ROLES.ADMIN) {
     return {};
   }
-  if (req.user?.role === "coach" && req.query.mine === "true") {
+  if (req.user?.role === ROLES.COACH && req.query.mine === "true") {
     return { coach: req.user._id };
+  }
+  if (req.user?.role === ROLES.SELLER && req.query.mine === "true") {
+    return { sellerId: req.user._id };
   }
   return { status: "verified" };
 };
@@ -98,7 +110,7 @@ exports.getProducts = async (req, res) => {
 
 exports.getPendingProducts = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
+    if (!req.user || req.user.role !== ROLES.ADMIN) {
       return res.status(403).json({ success: false, message: "Admin only" });
     }
     const products = await Product.find({ status: "pending" })
@@ -116,7 +128,7 @@ exports.getPendingProducts = async (req, res) => {
 
 exports.verifyProduct = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
+    if (!req.user || req.user.role !== ROLES.ADMIN) {
       return res.status(403).json({ success: false, message: "Admin only" });
     }
     const product = await Product.findById(req.params.id);
@@ -142,7 +154,7 @@ exports.verifyProduct = async (req, res) => {
 
 exports.rejectProduct = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
+    if (!req.user || req.user.role !== ROLES.ADMIN) {
       return res.status(403).json({ success: false, message: "Admin only" });
     }
     const product = await Product.findById(req.params.id);

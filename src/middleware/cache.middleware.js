@@ -2,7 +2,11 @@ const redisClient = require("../config/redis");
 
 const cache = (prefix) => {
   return async (req, res, next) => {
-    if (!redisClient || typeof redisClient.get !== "function") {
+    if (
+      !redisClient ||
+      typeof redisClient.get !== "function" ||
+      (typeof redisClient.isEnabled === "function" && !redisClient.isEnabled())
+    ) {
       return next();
     }
 
@@ -44,7 +48,10 @@ const cache = (prefix) => {
 
       next();
     } catch (err) {
-      console.error("Redis get error:", err);
+      if (typeof redisClient.disable === "function") {
+        redisClient.disable("cache middleware read failure");
+      }
+      console.error("Redis get error:", err.message || err);
       next();
     }
   };

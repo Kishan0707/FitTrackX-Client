@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 const EmailOtp = require("../models/emailOtp");
 const { sendEmail } = require("../config/email");
 const generateToken = require("../utils/generateToken");
+const { ALL_ROLES, ROLES } = require("../constants/roles");
 
 const OTP_DURATION_MS = 10 * 60 * 1000;
 
@@ -54,6 +55,24 @@ exports.registerUser = async (req, res) => {
       coachId,
       otp,
     } = req.body;
+    const normalizedRole =
+      typeof role === "string" && role.trim().length > 0 ?
+        role.trim().toLowerCase()
+      : ROLES.USER;
+
+    if (!ALL_ROLES.includes(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role selected",
+      });
+    }
+
+    if (normalizedRole === ROLES.ADMIN) {
+      return res.status(403).json({
+        success: false,
+        message: "Admin registration is not allowed from public endpoint",
+      });
+    }
 
     const userExists = await User.findOne({
       email,
@@ -88,7 +107,7 @@ exports.registerUser = async (req, res) => {
       name,
       email,
       password,
-      role,
+      role: normalizedRole,
       age,
       height,
       weight,
@@ -123,7 +142,16 @@ exports.sendRegistrationOtp = async (req, res) => {
     const { email } = req.body;
     const allowedDomains = ["gmail.com", "yahoo.com"];
 
-    const domain = email.split("@")[1];
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required for OTP",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const domain = normalizedEmail.split("@")[1];
+
     if (!allowedDomains.includes(domain)) {
       return res
         .status(400)
@@ -132,14 +160,7 @@ exports.sendRegistrationOtp = async (req, res) => {
           message: "Only Gmail and Yahoo emails are allowed",
         });
     }
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required for OTP",
-      });
-    }
-
-    const existing = await User.findOne({ email });
+    const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       return res.status(400).json({
         success: false,
@@ -152,13 +173,13 @@ exports.sendRegistrationOtp = async (req, res) => {
     const expiresAt = new Date(Date.now() + OTP_DURATION_MS);
 
     await EmailOtp.findOneAndUpdate(
-      { email },
-      { email, otp: hashed, expiresAt, verified: false },
+      { email: normalizedEmail },
+      { email: normalizedEmail, otp: hashed, expiresAt, verified: false },
       { upsert: true, new: true },
     );
 
     const emailResult = await sendEmail({
-      to: email,
+      to: normalizedEmail,
       subject: "FitTrack verification code",
       html: buildOtpMessage(otpCode),
     });

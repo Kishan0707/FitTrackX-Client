@@ -1,6 +1,7 @@
 const User = require("../models/user.model");
 const OnboardingSubmission = require("../models/onboarding.model");
 const BodyMeasurement = require("../models/bodyMeasurement.model");
+const { ROLES } = require("../constants/roles");
 
 const deriveCoachSuggestion = (goal) => {
   if (!goal) return "Performance + Mobility Coach";
@@ -19,6 +20,12 @@ exports.completeOnboarding = async (req, res) => {
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
+    if (req.user?.role !== ROLES.USER) {
+      return res.status(403).json({
+        success: false,
+        message: "Only user role can complete onboarding",
+      });
+    }
 
     const {
       promoRevealed = false,
@@ -26,7 +33,6 @@ exports.completeOnboarding = async (req, res) => {
       photoName = null,
       ...answers
     } = req.body || {};
-    Z;
 
     const height = Number(answers.height || 0);
     const currentWeight = Number(answers.currentWeight || 0);

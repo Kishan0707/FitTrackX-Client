@@ -26,7 +26,10 @@ exports.getSellerStats = async (req, res) => {
   const orders = await Order.find({ sellerId: req.user._id });
 
   const totalSales = orders.length;
-  const totalRevenue = orders.reduce((acc, o) => acc + o.totalAmount, 0);
+  const totalRevenue = orders.reduce(
+    (acc, order) => acc + Number(order.totalAmount || order.total || 0),
+    0,
+  );
 
   res.json({
     success: true,

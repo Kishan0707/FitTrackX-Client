@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 const Product = require("../models/product.model");
 const Affiliate = require("../models/affiliate.model");
 const Store = require("../models/store.model");
+const { ROLES } = require("../constants/roles");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -52,7 +53,10 @@ exports.createOrder = async (req, res) => {
       gstAmount,
       commissionAmount,
       totalAmount,
-      estimatedDelivery: deliveryDate, // ✅ correct
+      gst: gstAmount,
+      commission: commissionAmount,
+      total: totalAmount,
+      estimatedDelivery: deliveryDate,
       statusHistory: [{ status: "pending" }],
     });
 
@@ -179,6 +183,7 @@ exports.getSingleOrder = async (req, res) => {
 
     // 🔐 Only owner or seller can see
     if (
+      req.user.role !== ROLES.ADMIN &&
       order.userId.toString() !== req.user._id.toString() &&
       order.sellerId.toString() !== req.user._id.toString()
     ) {

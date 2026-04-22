@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
+const { ALL_ROLES, ROLES } = require("../constants/roles");
 
 const userSchema = new mongoose.Schema(
   {
@@ -24,8 +25,8 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "coach", "admin", "seller", "affiliate"],
-      default: "user",
+      enum: ALL_ROLES,
+      default: ROLES.USER,
     },
     isVerified: Boolean,
     walletBalance: Number,

@@ -22,6 +22,10 @@ const orderSchema = new mongoose.Schema(
       default: null,
     },
     price: Number,
+    commissionAmount: Number,
+    gstAmount: Number,
+    totalAmount: Number,
+    // Legacy compatibility fields
     commission: Number,
     gst: Number,
     total: Number,
@@ -46,6 +50,7 @@ const orderSchema = new mongoose.Schema(
     stripeSessionId: {
       type: String,
       unique: true,
+      sparse: true,
     },
   },
   {

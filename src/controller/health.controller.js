@@ -99,3 +99,31 @@ exports.calculateCalories = async (req, res) => {
     });
   }
 };
+exports.toggleProgress = async (req, res) => {
+  const { tipId, stepId } = req.body;
+  const userId = req.user._id;
+
+  const existing = await Progress.findOne({ userId, tipId, stepId });
+
+  if (existing) {
+    existing.completed = !existing.completed;
+    await existing.save();
+    return res.json(existing);
+  }
+
+  const newProgress = await Progress.create({
+    userId,
+    tipId,
+    stepId,
+    completed: true,
+  });
+
+  res.json(newProgress);
+};
+exports.getProgress = async (req, res) => {
+  const userId = req.user._id;
+
+  const progress = await Progress.find({ userId });
+
+  res.json(progress);
+};
