@@ -77,12 +77,37 @@ const emailTemplates = {
       <p>Best regards,<br>The FitTrack Team</p>
     </div>
   `,
-  notificationAlert: (name, title, message) => `
+   notificationAlert: (name, title, message) => `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #6366f1;">${title}</h2>
       <p>Hi ${name},</p>
       <p>${message}</p>
       <p>Open the FitTrack dashboard to see the latest activity.</p>
+      <p>Best regards,<br>The FitTrack Team</p>
+    </div>
+  `,
+
+  appointmentScheduled: (patientName, doctorName, appointmentTime) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #10b981;">Appointment Confirmed ✅</h2>
+      <p>Hi ${patientName},</p>
+      <p>Your appointment with <strong>Dr. ${doctorName}</strong> has been scheduled.</p>
+      <p><strong>Date & Time:</strong> ${appointmentTime}</p>
+      <p>Please be on time. You can join the video consultation through the FitTrack dashboard.</p>
+      <p>Best regards,<br>The FitTrack Team</p>
+    </div>
+  `,
+
+  emergencyPrescription: (patientName, doctorName, medicines) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #ef4444;">🚨 Emergency Prescription</h2>
+      <p>Hi ${patientName},</p>
+      <p>Dr. ${doctorName} has issued an <strong>emergency prescription</strong> for you.</p>
+      <h3>Prescribed Medicines:</h3>
+      <ul>
+        ${medicines.map(med => `<li>${med}</li>`).join("")}
+      </ul>
+      <p>Please follow the instructions carefully. Contact support if you have any questions.</p>
       <p>Best regards,<br>The FitTrack Team</p>
     </div>
   `,

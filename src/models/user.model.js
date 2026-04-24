@@ -133,6 +133,34 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Doctor-specific profile fields
+    rating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    reviewCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    location: {
+      type: String,
+      default: null,
+    },
+    address: {
+      type: String,
+      default: null,
+    },
+    qualifications: [{
+      type: String,
+      default: [],
+    }],
+    services: [{
+      type: String,
+      default: [],
+    }],
     phone: {
       type: String,
       default: null,
@@ -210,6 +238,31 @@ const userSchema = new mongoose.Schema(
     coachSuggestion: {
       type: String,
       default: null,
+    },
+    // Doctor-specific fields
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
+    doctorSettings: {
+      consultationFee: {
+        type: Number,
+        default: null,
+      },
+      feeType: {
+        type: String,
+        enum: ["one_time", "monthly"],
+        default: null,
+      },
+      consultationModes: {
+        type: [String],
+        enum: ["video", "chat", "in_person"],
+        default: ["video", "chat"],
+      },
+      emergencyContact: {
+        type: String,
+        default: null,
+      },
     },
     resetPasswordToken: {
       type: String,

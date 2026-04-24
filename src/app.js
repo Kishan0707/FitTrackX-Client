@@ -16,6 +16,9 @@ const healthRoutes = require("./routes/health.route");
 const statisticsRoutes = require("./routes/statistics.route");
 const adminRoutes = require("./routes/admin.route");
 const coachRoutes = require("./routes/coach.route");
+const doctorRoutes = require("./routes/doctor.route");
+const doctorPublicRoutes = require("./routes/doctorPublic.route");
+const appointmentRoutes = require("./routes/appointment.route");
 const planRoutes = require("./routes/plan.route");
 const aiWorkoutRoutes = require("./routes/aiWorkout.route");
 const pdfRoutes = require("./routes/pdf.route");
@@ -107,6 +110,9 @@ app.use("/api/health", healthRoutes);
 app.use("/api/stats", statisticsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/coach", coachRoutes);
+app.use("/api/doctor", doctorRoutes);
+app.use("/api/doctors", doctorPublicRoutes);
+app.use("/api/appointments", appointmentRoutes);
 app.use("/api/plans", planRoutes);
 
 app.use("/api/ai", aiWorkoutRoutes);
@@ -129,6 +135,10 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/seller", sellerRoutes);
 app.use("/api/affiliate", affiliateRoutes);
 //
+
+app.use("/api/webrtc", require("./routes/webrtc.route"));
+
+
 app.get("/", (req, res) => {
   res.send("FitTrack X API Running 🚀");
 });

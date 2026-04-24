@@ -7,7 +7,11 @@ const initializeSocket = (server) => {
   io = socketIO(server, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin || /^https:\/\/fit-track-x-clients.*\.vercel\.app$/.test(origin) || origin === "http://localhost:5173") {
+        if (
+          !origin ||
+          /^https:\/\/fit-track-x-clients.*\.vercel\.app$/.test(origin) ||
+          origin === "http://localhost:5173"
+        ) {
           callback(null, true);
         } else {
           callback(new Error("Not allowed by CORS"));
@@ -33,17 +37,53 @@ const initializeSocket = (server) => {
       io.to(receiverId).emit("stopTyping", senderId);
     });
 
-    // socket.on("sendMessage", async ({ receiverId, message }) => {
-    //   const senderId = onlineUsers.get(socket.id);
-    //   if (!senderId) return;
-    //   const Message = require("../models/message.model");
-    //   const msg = await Message.create({ sender: senderId, receiverId, message });
-    //   io.to(receiverId.toString()).emit("receiveMessage", msg);
-    // });
-
     socket.on("disconnect", () => {
       onlineUsers.delete(socket.id);
       io.emit("onlineUsers", Array.from(new Set(onlineUsers.values())));
+    });
+
+    // ================= VIDEO CALL =================
+
+    socket.on("join-call", async ({ roomId, userId }) => {
+      const appointment = await Appointment.findOne({ roomId });
+
+      if (!appointment) return;
+
+      // 🔥 SECURITY CHECK
+      if (
+        appointment.userId.toString() !== userId &&
+        appointment.doctorId.toString() !== userId
+      ) {
+        return socket.emit("error", "Unauthorized");
+      }
+
+      // 💰 PAYMENT CHECK
+      if (appointment.paymentStatus !== "paid") {
+        return socket.emit("error", "Payment required");
+      }
+
+      socket.join(roomId);
+      socket.to(roomId).emit("user-joined", userId);
+    });
+
+    // OFFER
+    socket.on("offer", ({ offer, roomId }) => {
+      socket.to(roomId).emit("offer", offer);
+    });
+
+    // ANSWER
+    socket.on("answer", ({ answer, roomId }) => {
+      socket.to(roomId).emit("answer", answer);
+    });
+
+    // ICE
+    socket.on("ice-candidate", ({ candidate, roomId }) => {
+      socket.to(roomId).emit("ice-candidate", candidate);
+    });
+
+    // END CALL
+    socket.on("end-call", ({ roomId }) => {
+      socket.to(roomId).emit("call-ended");
     });
   });
 
