@@ -53,6 +53,56 @@ router.delete(
   authorizeRoles(ROLES.DOCTOR),
   doctorController.removePatient,
 );
+
+// Progress Tracking
+router.get(
+  "/patients/:id/progress",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.getPatientProgress,
+);
+router.post(
+  "/patients/:id/progress/entry",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.addProgressEntry,
+);
+router.post(
+  "/patients/:id/progress/photo",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.addProgressPhoto,
+);
+router.put(
+  "/patients/:id/progress/goals",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.updatePatientGoals,
+);
+router.post(
+  "/patients/:id/progress/note",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.addDoctorNote,
+);
+router.get(
+  "/patients/:id/progress/analytics",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.getProgressAnalytics,
+);
+router.put(
+  "/patients/:id/progress/status",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.updateProgressStatus,
+);
+router.get(
+  "/progress/summary",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.getProgressSummary,
+);
 // Appointments
 router.get(
   "/appointments",

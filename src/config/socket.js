@@ -22,20 +22,27 @@ const initializeSocket = (server) => {
     },
   });
 
-  io.on("connection", (socket) => {
-    socket.on("join", (userId) => {
-      socket.join(userId);
-      onlineUsers.set(socket.id, userId);
-      io.emit("onlineUsers", Array.from(new Set(onlineUsers.values())));
-    });
+   io.on("connection", (socket) => {
+     socket.on("join", (userId) => {
+       socket.join(userId);
+       onlineUsers.set(socket.id, userId);
+       io.emit("onlineUsers", Array.from(new Set(onlineUsers.values())));
+     });
 
-    socket.on("typing", ({ senderId, receiverId }) => {
-      io.to(receiverId).emit("typing", senderId);
-    });
+     // Join patient-specific progress room
+     socket.on("join-progress", (patientId) => {
+       const roomName = `patient_${patientId}`;
+       socket.join(roomName);
+       console.log(`Socket ${socket.id} joined progress room: ${roomName}`);
+     });
 
-    socket.on("stopTyping", ({ senderId, receiverId }) => {
-      io.to(receiverId).emit("stopTyping", senderId);
-    });
+     socket.on("typing", ({ senderId, receiverId }) => {
+       io.to(receiverId).emit("typing", senderId);
+     });
+
+     socket.on("stopTyping", ({ senderId, receiverId }) => {
+       io.to(receiverId).emit("stopTyping", senderId);
+     });
 
     socket.on("disconnect", () => {
       onlineUsers.delete(socket.id);

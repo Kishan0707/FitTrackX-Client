@@ -1,7 +1,17 @@
 const { Resend } = require("resend");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const isEmailConfigured = !!process.env.RESEND_API_KEY;
+let resend = null;
+let isEmailConfigured = false;
+
+try {
+  if (process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+    isEmailConfigured = true;
+  }
+} catch (e) {
+  console.warn("Resend not configured:", e.message);
+  isEmailConfigured = false;
+}
 const sendEmail = async ({ to, subject, html }) => {
   try {
     const response = await resend.emails.send({
@@ -113,4 +123,4 @@ const emailTemplates = {
   `,
 };
 
-module.exports = { sendEmail, emailTemplates, isEmailConfigured };
+module.exports = { sendEmail, emailTemplates, isEmailConfigured: () => isEmailConfigured };

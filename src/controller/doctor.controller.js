@@ -6,7 +6,7 @@ const Prescription = require("../models/prescription.model");
 const Report = require("../models/report.model");
 const Subscription = require("../models/subscription.model");
 const DoctorPatient = require("../models/doctorPatient.model.js");
-console.log("DoctorPatient:", DoctorPatient);
+const DoctorPatientProgress = require("../models/doctorPatientProgress.model");
 const {
   sendEmail,
   emailTemplates,
@@ -1721,6 +1721,624 @@ exports.updateReportStatus = async (req, res) => {
       data: report,
     });
   } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// ==================== PROGRESS TRACKING ====================
+
+// @desc    Get patient progress tracking data
+// @route   GET /api/doctor/patients/:id/progress
+// @access  Private (Doctor only)
+exports.getPatientProgress = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+
+    // Verify patient exists and is associated with doctor
+    const patient = await User.findById(id);
+    if (!patient || patient.role !== "user") {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: id,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view this patient's progress",
+      });
+    }
+
+    // Get or create progress tracking record
+    let progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    });
+
+    // If no record exists, create one with initial stats
+    if (!progressRecord) {
+      const bodyMeasurements = require("../models/bodyMeasurement.model");
+      const initialMeasurements = await bodyMeasurements.findOne({ userId: id });
+
+      progressRecord = await DoctorPatientProgress.create({
+        patientId: id,
+        doctorId,
+        programType: "general_health",
+        initialStats: initialMeasurements ? {
+          weight: initialMeasurements.weight,
+          bodyFat: initialMeasurements.bodyFat,
+          measurements: {
+            chest: initialMeasurements.chest,
+            waist: initialMeasurements.waist,
+            hips: initialMeasurements.hips,
+            arms: initialMeasurements.arms,
+            thighs: initialMeasurements.thighs,
+            forearms: initialMeasurements.forearms,
+            biceps: initialMeasurements.biceps,
+          },
+        } : {},
+        currentStats: initialMeasurements ? {
+          weight: initialMeasurements.weight,
+          bodyFat: initialMeasurements.bodyFat,
+          measurements: {
+            chest: initialMeasurements.chest,
+            waist: initialMeasurements.waist,
+            hips: initialMeasurements.hips,
+            arms: initialMeasurements.arms,
+            thighs: initialMeasurements.thighs,
+          },
+        } : {},
+      });
+    }
+
+    // Populate references
+    await progressRecord.populate("patientId", "name email age gender height profilePicture");
+    await progressRecord.populate("doctorId", "name specialization profilePicture");
+
+    res.status(200).json({
+      success: true,
+      data: progressRecord,
+    });
+  } catch (error) {
+    console.error("Get patient progress error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Add progress entry (measurements, weight, notes)
+// @route   POST /api/doctor/patients/:id/progress/entry
+// @access  Private (Doctor only)
+exports.addProgressEntry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+    const {
+      weight,
+      bodyFat,
+      measurements,
+      notes,
+      doctorNotes,
+      symptoms,
+      vitals,
+      dietAdherence,
+      exerciseAdherence,
+      overallScore,
+    } = req.body;
+
+    // Verify association
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: id,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this patient's progress",
+      });
+    }
+
+    // Find or create progress record
+    let progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    });
+
+    if (!progressRecord) {
+      progressRecord = await DoctorPatientProgress.create({
+        patientId: id,
+        doctorId,
+        currentStats: {},
+      });
+    }
+
+    // Build entry data
+    const entryData = { date: new Date() };
+    if (weight !== undefined) entryData.weight = weight;
+    if (bodyFat !== undefined) entryData.bodyFat = bodyFat;
+    if (measurements) entryData.measurements = measurements;
+    if (notes) entryData.notes = notes;
+    if (doctorNotes) entryData.doctorNotes = doctorNotes;
+    if (symptoms) entryData.symptoms = symptoms;
+    if (vitals) entryData.vitals = vitals;
+    if (dietAdherence !== undefined) entryData.dietAdherence = dietAdherence;
+    if (exerciseAdherence !== undefined) entryData.exerciseAdherence = exerciseAdherence;
+    if (overallScore !== undefined) entryData.overallScore = overallScore;
+
+    // Add entry to progress data
+    progressRecord.progressData.push(entryData);
+
+    // Update current stats
+    if (weight !== undefined) progressRecord.currentStats.weight = weight;
+    if (bodyFat !== undefined) progressRecord.currentStats.bodyFat = bodyFat;
+    if (measurements) {
+      progressRecord.currentStats.measurements = {
+        ...progressRecord.currentStats.measurements,
+        ...measurements,
+      };
+    }
+
+    // Update last reviewed
+    progressRecord.lastReviewed = {
+      date: new Date(),
+      doctorId,
+    };
+
+    await progressRecord.save();
+
+    // Emit real-time update via socket
+    const getIO = require("../config/socket").getIO;
+    try {
+      const io = getIO();
+      io.to(`patient_${id}`).emit("progressUpdate", {
+        patientId: id,
+        doctorId,
+        entry: entryData,
+        progressPercentage: progressRecord.calculateWeightProgress(),
+      });
+    } catch (socketErr) {
+      console.log("Socket not available:", socketErr.message);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Progress entry added",
+      data: progressRecord,
+    });
+  } catch (error) {
+    console.error("Add progress entry error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Upload/add progress photo
+// @route   POST /api/doctor/patients/:id/progress/photo
+// @access  Private (Doctor only)
+exports.addProgressPhoto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+    const { photoUrl, caption, date } = req.body;
+
+    if (!photoUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "Photo URL is required",
+      });
+    }
+
+    // Verify association
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: id,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this patient's progress",
+      });
+    }
+
+    // Get or create progress record
+    let progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    });
+
+    if (!progressRecord) {
+      progressRecord = await DoctorPatientProgress.create({
+        patientId: id,
+        doctorId,
+      });
+    }
+
+    // Add photo to latest entry or create new entry
+    const latestEntry = progressRecord.progressData[progressRecord.progressData.length - 1];
+    if (latestEntry) {
+      latestEntry.photos = latestEntry.photos || [];
+      latestEntry.photos.push(photoUrl);
+    } else {
+      progressRecord.progressData.push({
+        date: date ? new Date(date) : new Date(),
+        photos: [photoUrl],
+      });
+    }
+
+    // Also add to separate ProgressPhoto collection for gallery view
+    const ProgressPhoto = require("../models/progressPhoto.model");
+    await ProgressPhoto.create({
+      userId: id,
+      photo: photoUrl,
+      date: date ? new Date(date) : new Date(),
+    });
+
+    await progressRecord.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Progress photo added",
+      data: progressRecord,
+    });
+  } catch (error) {
+    console.error("Add progress photo error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Update patient goals and targets
+// @route   PUT /api/doctor/patients/:id/progress/goals
+// @access  Private (Doctor only)
+exports.updatePatientGoals = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+    const {
+      targetWeight,
+      targetBodyFat,
+      targetMeasurements,
+      deadline,
+      description,
+      weeklyTarget,
+      programType,
+      medicalCondition,
+    } = req.body;
+
+    // Verify association
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: id,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this patient's goals",
+      });
+    }
+
+    const progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    });
+
+    if (!progressRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Progress record not found. Create an entry first.",
+      });
+    }
+
+    // Update goals
+    if (targetWeight !== undefined) progressRecord.goals.targetWeight = targetWeight;
+    if (targetBodyFat !== undefined) progressRecord.goals.targetBodyFat = targetBodyFat;
+    if (targetMeasurements) progressRecord.goals.targetMeasurements = { ...progressRecord.goals.targetMeasurements, ...targetMeasurements };
+    if (deadline) progressRecord.goals.deadline = deadline;
+    if (description !== undefined) progressRecord.goals.description = description;
+    if (weeklyTarget !== undefined) progressRecord.goals.weeklyTarget = weeklyTarget;
+    if (programType) progressRecord.programType = programType;
+    if (medicalCondition) progressRecord.medicalCondition = medicalCondition;
+
+    await progressRecord.save();
+
+    // Emit socket event
+    const getIO = require("../config/socket").getIO;
+    try {
+      const io = getIO();
+      io.to(`patient_${id}`).emit("goalsUpdated", {
+        patientId: id,
+        doctorId,
+        goals: progressRecord.goals,
+      });
+    } catch (socketErr) {}
+
+    res.status(200).json({
+      success: true,
+      message: "Patient goals updated",
+      data: progressRecord,
+    });
+  } catch (error) {
+    console.error("Update patient goals error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Add doctor clinical note to patient progress
+// @route   POST /api/doctor/patients/:id/progress/note
+// @access  Private (Doctor only)
+exports.addDoctorNote = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._doctorId || req.user._id;
+    const { note } = req.body;
+
+    if (!note) {
+      return res.status(400).json({
+        success: false,
+        message: "Note content is required",
+      });
+    }
+
+    // Verify association
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: id,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized",
+      });
+    }
+
+    const progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    });
+
+    if (!progressRecord) {
+      progressRecord = await DoctorPatientProgress.create({
+        patientId: id,
+        doctorId,
+      });
+    }
+
+    progressRecord.doctorNotes.push({
+      date: new Date(),
+      note,
+      doctorId,
+    });
+
+    await progressRecord.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Note added",
+      data: progressRecord,
+    });
+  } catch (error) {
+    console.error("Add doctor note error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Get progress analytics and summary for a patient
+// @route   GET /api/doctor/patients/:id/progress/analytics
+// @access  Private (Doctor only)
+exports.getProgressAnalytics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+    const { period = "3months" } = req.query;
+
+    // Verify association
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: id,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized",
+      });
+    }
+
+    const progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    }).populate("patientId", "name age gender height");
+
+    if (!progressRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "No progress data found",
+      });
+    }
+
+    // Calculate date range
+    const monthsMap = { "1month": 1, "3months": 3, "6months": 6, "1year": 12 };
+    const months = monthsMap[period] || 3;
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months);
+
+    const filteredEntries = progressRecord.progressData.filter(
+      (entry) => entry.date >= startDate
+    );
+
+    // Calculate trends
+    const weightTrend = [];
+    const bodyFatTrend = [];
+    const adherenceScores = [];
+
+    filteredEntries.forEach((entry) => {
+      if (entry.weight) weightTrend.push({ date: entry.date, weight: entry.weight });
+      if (entry.bodyFat) bodyFatTrend.push({ date: entry.date, bodyFat: entry.bodyFat });
+      if (entry.overallScore !== undefined) {
+        adherenceScores.push({ date: entry.date, score: entry.overallScore });
+      }
+    });
+
+    // Calculate avg weekly change
+    const weeklyChanges = [];
+    for (let i = 1; i < filteredEntries.length; i++) {
+      const prev = filteredEntries[i - 1];
+      const curr = filteredEntries[i];
+      if (prev.weight && curr.weight) {
+        weeklyChanges.push(curr.weight - prev.weight);
+      }
+    }
+
+    const avgWeeklyChange = weeklyChanges.length > 0
+      ? weeklyChanges.reduce((a, b) => a + b, 0) / weeklyChanges.length
+      : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        patient: progressRecord.patientId,
+        programType: progressRecord.programType,
+        progressPercentage: progressRecord.calculateWeightProgress(),
+        currentWeight: progressRecord.currentStats?.weight,
+        initialWeight: progressRecord.initialStats?.weight,
+        avgWeeklyChange: Math.round(avgWeeklyChange * 100) / 100,
+        totalEntries: filteredEntries.length,
+        weightTrend,
+        bodyFatTrend,
+        adherenceScores,
+        goals: progressRecord.goals,
+        status: progressRecord.status,
+        lastReviewed: progressRecord.lastReviewed,
+        unreadAlerts: progressRecord.alerts.filter(a => !a.acknowledged).length,
+      },
+    });
+  } catch (error) {
+    console.error("Get progress analytics error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Pause/Resume/Cancel patient progress tracking
+// @route   PUT /api/doctor/patients/:id/progress/status
+// @access  Private (Doctor only)
+exports.updateProgressStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+    const { status, reason } = req.body;
+
+    if (!["active", "paused", "completed", "cancelled"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+
+    const progressRecord = await DoctorPatientProgress.findOne({
+      patientId: id,
+      doctorId,
+    });
+
+    if (!progressRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Progress record not found",
+      });
+    }
+
+    progressRecord.status = status;
+
+    if (reason) {
+      progressRecord.doctorNotes.push({
+        date: new Date(),
+        note: `Status changed to ${status}: ${reason}`,
+        doctorId,
+      });
+    }
+
+    await progressRecord.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Progress tracking ${status}`,
+      data: progressRecord,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Get all patient progress summaries for doctor's dashboard
+// @route   GET /api/doctor/progress/summary
+// @access  Private (Doctor only)
+exports.getProgressSummary = async (req, res) => {
+  try {
+    const doctorId = req.user._id;
+    const { status } = req.query;
+
+    const filter = { doctorId };
+    if (status) filter.status = status;
+
+    const progressRecords = await DoctorPatientProgress.find(filter)
+      .populate("patientId", "name email age gender profilePicture")
+      .sort({ updatedAt: -1 });
+
+    const summary = progressRecords.map((record) => ({
+      patient: record.patientId,
+      programType: record.programType,
+      progress: record.calculateWeightProgress(),
+      startDate: record.startDate,
+      lastEntry: record.progressData.length > 0
+        ? record.progressData[record.progressData.length - 1].date
+        : null,
+      status: record.status,
+      nextFollowUp: record.nextFollowUp,
+      unreadAlerts: record.alerts.filter(a => !a.acknowledged).length,
+      recentNote: record.doctorNotes.length > 0
+        ? record.doctorNotes[record.doctorNotes.length - 1]
+        : null,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: summary.length,
+      data: summary,
+    });
+  } catch (error) {
+    console.error("Get progress summary error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
