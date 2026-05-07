@@ -4,7 +4,13 @@ const prescriptionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   isEmergency: { type: Boolean, default: false },
-  medicines: [String],
+  medicines: [
+    {
+      name: String,
+      dosage: String,
+      frequency: String,
+    },
+  ],
   notes: String,
   createdAt: { type: Date, default: Date.now },
 });

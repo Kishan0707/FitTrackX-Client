@@ -87,7 +87,7 @@ const emailTemplates = {
       <p>Best regards,<br>The FitTrack Team</p>
     </div>
   `,
-   notificationAlert: (name, title, message) => `
+  notificationAlert: (name, title, message) => `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #6366f1;">${title}</h2>
       <p>Hi ${name},</p>
@@ -115,7 +115,12 @@ const emailTemplates = {
       <p>Dr. ${doctorName} has issued an <strong>emergency prescription</strong> for you.</p>
       <h3>Prescribed Medicines:</h3>
       <ul>
-        ${medicines.map(med => `<li>${med}</li>`).join("")}
+        ${medicines
+          .map((med) => {
+            if (typeof med === "string") return `<li>${med}</li>`;
+            return `<li>${med.name || "Medicine"}${med.dosage ? ` - ${med.dosage}` : ""}${med.frequency ? ` (${med.frequency})` : ""}</li>`;
+          })
+          .join("")}
       </ul>
       <p>Please follow the instructions carefully. Contact support if you have any questions.</p>
       <p>Best regards,<br>The FitTrack Team</p>
@@ -123,4 +128,8 @@ const emailTemplates = {
   `,
 };
 
-module.exports = { sendEmail, emailTemplates, isEmailConfigured: () => isEmailConfigured };
+module.exports = {
+  sendEmail,
+  emailTemplates,
+  isEmailConfigured: () => isEmailConfigured,
+};

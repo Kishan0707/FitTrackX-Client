@@ -40,6 +40,34 @@ const getDoctorPatients = async (doctorId) => {
   return Array.from(distinctUserIds);
 };
 
+const isPatientAssociatedWithDoctor = async (doctorId, patientId) => {
+  const associatedByLink = await DoctorPatient.exists({
+    doctorId,
+    patientId,
+  });
+  if (associatedByLink) return true;
+
+  const associatedByAppointment = await Appointment.exists({
+    doctorId,
+    userId: patientId,
+  });
+  if (associatedByAppointment) return true;
+
+  const associatedByPrescription = await Prescription.exists({
+    doctorId,
+    userId: patientId,
+  });
+  if (associatedByPrescription) return true;
+
+  const associatedByReport = await Report.exists({
+    doctorId,
+    userId: patientId,
+  });
+  if (associatedByReport) return true;
+
+  return false;
+};
+
 // @desc    Get doctor dashboard statistics
 // @route   GET /api/doctor/dashboard
 // @access  Private (Doctor only)
@@ -269,10 +297,7 @@ exports.getPatientDetails = async (req, res) => {
     }
 
     // Check if this patient is associated with the doctor
-    const isAssociated = await Appointment.findOne({
-      doctorId: req.user._id,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(req.user._id, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -751,9 +776,10 @@ exports.cancelAppointment = async (req, res) => {
 // @access  Private (Doctor only)
 exports.createPrescription = async (req, res) => {
   try {
-    const { userId, medicines, notes, isEmergency } = req.body;
+    const patientId = req.body.userId || req.body.patientId;
+    const { medicines, notes, isEmergency } = req.body;
 
-    if (!userId || !medicines || !Array.isArray(medicines)) {
+    if (!patientId || !medicines || !Array.isArray(medicines)) {
       return res.status(400).json({
         success: false,
         message: "Please provide user ID and medicines array",
@@ -761,7 +787,7 @@ exports.createPrescription = async (req, res) => {
     }
 
     // Verify user exists
-    const user = await User.findById(userId);
+    const user = await User.findById(patientId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -770,10 +796,10 @@ exports.createPrescription = async (req, res) => {
     }
 
     // Verify association with doctor
-    const isAssociated = await Appointment.findOne({
-      doctorId: req.user._id,
-      userId,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(
+      req.user._id,
+      patientId,
+    );
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -783,7 +809,7 @@ exports.createPrescription = async (req, res) => {
     }
 
     const prescription = await Prescription.create({
-      userId,
+      userId: patientId,
       doctorId: req.user._id,
       medicines,
       notes: notes || "",
@@ -1406,10 +1432,7 @@ exports.getPatientMedicalHistory = async (req, res) => {
     const { id } = req.params;
 
     // Verify patient exists and is associated with doctor
-    const isAssociated = await Appointment.findOne({
-      doctorId: req.user._id,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(req.user._id, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -2145,10 +2168,7 @@ exports.getPatientProgress = async (req, res) => {
       });
     }
 
-    const isAssociated = await Appointment.findOne({
-      doctorId,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(doctorId, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -2252,10 +2272,7 @@ exports.addProgressEntry = async (req, res) => {
     } = req.body;
 
     // Verify association
-    const isAssociated = await Appointment.findOne({
-      doctorId,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(doctorId, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -2358,10 +2375,7 @@ exports.addProgressPhoto = async (req, res) => {
     }
 
     // Verify association
-    const isAssociated = await Appointment.findOne({
-      doctorId,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(doctorId, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -2439,10 +2453,7 @@ exports.updatePatientGoals = async (req, res) => {
     } = req.body;
 
     // Verify association
-    const isAssociated = await Appointment.findOne({
-      doctorId,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(doctorId, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -2525,10 +2536,7 @@ exports.addDoctorNote = async (req, res) => {
     }
 
     // Verify association
-    const isAssociated = await Appointment.findOne({
-      doctorId,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(doctorId, id);
 
     if (!isAssociated) {
       return res.status(403).json({
@@ -2581,10 +2589,7 @@ exports.getProgressAnalytics = async (req, res) => {
     const { period = "3months" } = req.query;
 
     // Verify association
-    const isAssociated = await Appointment.findOne({
-      doctorId,
-      userId: id,
-    });
+    const isAssociated = await isPatientAssociatedWithDoctor(doctorId, id);
 
     if (!isAssociated) {
       return res.status(403).json({
