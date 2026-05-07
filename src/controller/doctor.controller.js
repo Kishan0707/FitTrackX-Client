@@ -7,11 +7,15 @@ const Report = require("../models/report.model");
 const Subscription = require("../models/subscription.model");
 const DoctorPatient = require("../models/doctorPatient.model.js");
 const DoctorPatientProgress = require("../models/doctorPatientProgress.model");
+const RiskAssignment = require("../models/riskAssignment.model");
+const Message = require("../models/message.model");
+const DoctorSchedule = require("../models/doctorSchedule.model");
 const {
   sendEmail,
   emailTemplates,
   isEmailConfigured,
 } = require("../config/email");
+const { getIO } = require("../config/socket");
 const DOCTOR_SETTINGS = require("../constants/roles").DOCTOR_SETTINGS;
 
 // Helper: Get doctor's patients (users who have appointments/prescriptions with this doctor)
@@ -1512,6 +1516,400 @@ exports.bulkUpdateAppointmentStatus = async (req, res) => {
   }
 };
 
+// @desc    Assign risk level to patient
+// @route   POST /api/doctor/patients/:id/risk-assignment
+// @access  Private (Doctor only)
+exports.assignRiskLevel = async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    const doctorId = req.user._id;
+    const { riskLevel, notes } = req.body;
+
+    if (!riskLevel || !["low", "medium", "high"].includes(riskLevel)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide valid risk level (low, medium, high)",
+      });
+    }
+
+    // Verify patient exists and is a user
+    const patient = await User.findById(patientId);
+    if (!patient || patient.role !== "user") {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    // Check if patient is associated with doctor
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: patientId,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to assign risk level to this patient",
+      });
+    }
+
+    // Check if risk assignment already exists for this patient-doctor pair
+    let riskAssignment = await RiskAssignment.findOne({
+      patientId,
+      doctorId,
+    });
+
+    if (riskAssignment) {
+      // Update existing assignment
+      riskAssignment.riskLevel = riskLevel;
+      riskAssignment.notes = notes || "";
+      riskAssignment.assignedAt = new Date();
+      await riskAssignment.save();
+    } else {
+      // Create new risk assignment
+      riskAssignment = await RiskAssignment.create({
+        patientId,
+        doctorId,
+        riskLevel,
+        notes: notes || "",
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Risk level assigned successfully",
+      data: riskAssignment,
+    });
+  } catch (error) {
+    console.error("Assign risk level error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get risk assignment for patient
+// @route   GET /api/doctor/patients/:id/risk-assignment
+// @access  Private (Doctor only)
+exports.getRiskAssignment = async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    const doctorId = req.user._id;
+
+    // Verify patient exists and is a user
+    const patient = await User.findById(patientId);
+    if (!patient || patient.role !== "user") {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    // Check if patient is associated with doctor
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: patientId,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view risk assignment for this patient",
+      });
+    }
+
+    const riskAssignment = await RiskAssignment.findOne({
+      patientId,
+      doctorId,
+    });
+
+    if (!riskAssignment) {
+      return res.status(404).json({
+        success: false,
+        message: "No risk assignment found for this patient",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: riskAssignment,
+    });
+  } catch (error) {
+    console.error("Get risk assignment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Update risk assignment for patient
+// @route   PUT /api/doctor/patients/:id/risk-assignment
+// @access  Private (Doctor only)
+exports.updateRiskAssignment = async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    const doctorId = req.user._id;
+    const { riskLevel, notes } = req.body;
+
+    if (!riskLevel || !["low", "medium", "high"].includes(riskLevel)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide valid risk level (low, medium, high)",
+      });
+    }
+
+    // Verify patient exists and is a user
+    const patient = await User.findById(patientId);
+    if (!patient || patient.role !== "user") {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    // Check if patient is associated with doctor
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: patientId,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update risk assignment for this patient",
+      });
+    }
+
+    const riskAssignment = await RiskAssignment.findOneAndUpdate(
+      {
+        patientId,
+        doctorId,
+      },
+      {
+        riskLevel,
+        notes: notes || "",
+        assignedAt: new Date(),
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!riskAssignment) {
+      return res.status(404).json({
+        success: false,
+        message: "Risk assignment not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Risk assignment updated successfully",
+      data: riskAssignment,
+    });
+  } catch (error) {
+    console.error("Update risk assignment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Delete risk assignment for patient
+// @route   DELETE /api/doctor/patients/:id/risk-assignment
+// @access  Private (Doctor only)
+exports.deleteRiskAssignment = async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    const doctorId = req.user._id;
+
+    // Verify patient exists and is a user
+    const patient = await User.findById(patientId);
+    if (!patient || patient.role !== "user") {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    // Check if patient is associated with doctor
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: patientId,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete risk assignment for this patient",
+      });
+    }
+
+    const riskAssignment = await RiskAssignment.findOneAndDelete({
+      patientId,
+      doctorId,
+    });
+
+    if (!riskAssignment) {
+      return res.status(404).json({
+        success: false,
+        message: "Risk assignment not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Risk assignment deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete risk assignment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Get all patients with their risk levels for a doctor
+// @route   GET /api/doctor/patients/risk-levels
+// @access  Private (Doctor only)
+exports.getPatientsWithRiskLevels = async (req, res) => {
+  try {
+    const doctorId = req.user._id;
+    const { page = 1, limit = 20, search, riskLevel } = req.query;
+
+    // Get doctor's patients
+    const patientIds = await getDoctorPatients(doctorId);
+
+    const filter = { _id: { $in: patientIds } };
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Build aggregation pipeline
+    const pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: "riskassignments",
+          let: { patientId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$patientId", "$$patientId"] },
+                    { $eq: ["$doctorId", mongoose.Types.ObjectId(doctorId)] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "riskAssignment",
+        },
+      },
+      {
+        $addFields: {
+          riskLevel: { $arrayElemAt: ["$riskAssignment.riskLevel", 0] },
+          riskNotes: { $arrayElemAt: ["$riskAssignment.notes", 0] },
+          riskAssignedAt: { $arrayElemAt: ["$riskAssignment.assignedAt", 0] },
+        },
+      },
+    ];
+
+    // Add risk level filter if specified
+    if (riskLevel && ["low", "medium", "high"].includes(riskLevel)) {
+      pipeline.push({
+        $match: { riskLevel },
+      });
+    }
+
+    // Add pagination
+    const skip = (page - 1) * limit;
+    pipeline.push(
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+      {
+        $project: {
+          password: 0,
+          __v: 0,
+          refreshToken: 0,
+          resetPasswordToken: 0,
+          resetPasswordExpire: 0,
+        },
+      },
+    );
+
+    // Get total count for pagination
+    const countPipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: "riskassignments",
+          let: { patientId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$patientId", "$$patientId"] },
+                    { $eq: ["$doctorId", mongoose.Types.ObjectId(doctorId)] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "riskAssignment",
+        },
+      },
+      {
+        $addFields: {
+          riskLevel: { $arrayElemAt: ["$riskAssignment.riskLevel", 0] },
+        },
+      },
+    ];
+
+    if (riskLevel && ["low", "medium", "high"].includes(riskLevel)) {
+      countPipeline.push({
+        $match: { riskLevel },
+      });
+    }
+
+    countPipeline.push({ $count: "total" });
+
+    const [patients, totalResult] = await Promise.all([
+      User.aggregate(pipeline),
+      User.aggregate(countPipeline),
+    ]);
+
+    const total = totalResult.length > 0 ? totalResult[0].total : 0;
+
+    res.status(200).json({
+      success: true,
+      count: patients.length,
+      total,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / limit),
+      },
+      data: patients,
+    });
+  } catch (error) {
+    console.error("Get patients with risk levels error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 // @desc    Get consultation fee settings
 // @route   GET /api/doctor/settings/consultation-fee
 // @access  Private (Doctor only)
@@ -1768,42 +2166,56 @@ exports.getPatientProgress = async (req, res) => {
     // If no record exists, create one with initial stats
     if (!progressRecord) {
       const bodyMeasurements = require("../models/bodyMeasurement.model");
-      const initialMeasurements = await bodyMeasurements.findOne({ userId: id });
+      const initialMeasurements = await bodyMeasurements.findOne({
+        userId: id,
+      });
 
       progressRecord = await DoctorPatientProgress.create({
         patientId: id,
         doctorId,
         programType: "general_health",
-        initialStats: initialMeasurements ? {
-          weight: initialMeasurements.weight,
-          bodyFat: initialMeasurements.bodyFat,
-          measurements: {
-            chest: initialMeasurements.chest,
-            waist: initialMeasurements.waist,
-            hips: initialMeasurements.hips,
-            arms: initialMeasurements.arms,
-            thighs: initialMeasurements.thighs,
-            forearms: initialMeasurements.forearms,
-            biceps: initialMeasurements.biceps,
-          },
-        } : {},
-        currentStats: initialMeasurements ? {
-          weight: initialMeasurements.weight,
-          bodyFat: initialMeasurements.bodyFat,
-          measurements: {
-            chest: initialMeasurements.chest,
-            waist: initialMeasurements.waist,
-            hips: initialMeasurements.hips,
-            arms: initialMeasurements.arms,
-            thighs: initialMeasurements.thighs,
-          },
-        } : {},
+        initialStats:
+          initialMeasurements ?
+            {
+              weight: initialMeasurements.weight,
+              bodyFat: initialMeasurements.bodyFat,
+              measurements: {
+                chest: initialMeasurements.chest,
+                waist: initialMeasurements.waist,
+                hips: initialMeasurements.hips,
+                arms: initialMeasurements.arms,
+                thighs: initialMeasurements.thighs,
+                forearms: initialMeasurements.forearms,
+                biceps: initialMeasurements.biceps,
+              },
+            }
+          : {},
+        currentStats:
+          initialMeasurements ?
+            {
+              weight: initialMeasurements.weight,
+              bodyFat: initialMeasurements.bodyFat,
+              measurements: {
+                chest: initialMeasurements.chest,
+                waist: initialMeasurements.waist,
+                hips: initialMeasurements.hips,
+                arms: initialMeasurements.arms,
+                thighs: initialMeasurements.thighs,
+              },
+            }
+          : {},
       });
     }
 
     // Populate references
-    await progressRecord.populate("patientId", "name email age gender height profilePicture");
-    await progressRecord.populate("doctorId", "name specialization profilePicture");
+    await progressRecord.populate(
+      "patientId",
+      "name email age gender height profilePicture",
+    );
+    await progressRecord.populate(
+      "doctorId",
+      "name specialization profilePicture",
+    );
 
     res.status(200).json({
       success: true,
@@ -1876,7 +2288,8 @@ exports.addProgressEntry = async (req, res) => {
     if (symptoms) entryData.symptoms = symptoms;
     if (vitals) entryData.vitals = vitals;
     if (dietAdherence !== undefined) entryData.dietAdherence = dietAdherence;
-    if (exerciseAdherence !== undefined) entryData.exerciseAdherence = exerciseAdherence;
+    if (exerciseAdherence !== undefined)
+      entryData.exerciseAdherence = exerciseAdherence;
     if (overallScore !== undefined) entryData.overallScore = overallScore;
 
     // Add entry to progress data
@@ -1971,7 +2384,8 @@ exports.addProgressPhoto = async (req, res) => {
     }
 
     // Add photo to latest entry or create new entry
-    const latestEntry = progressRecord.progressData[progressRecord.progressData.length - 1];
+    const latestEntry =
+      progressRecord.progressData[progressRecord.progressData.length - 1];
     if (latestEntry) {
       latestEntry.photos = latestEntry.photos || [];
       latestEntry.photos.push(photoUrl);
@@ -2050,12 +2464,20 @@ exports.updatePatientGoals = async (req, res) => {
     }
 
     // Update goals
-    if (targetWeight !== undefined) progressRecord.goals.targetWeight = targetWeight;
-    if (targetBodyFat !== undefined) progressRecord.goals.targetBodyFat = targetBodyFat;
-    if (targetMeasurements) progressRecord.goals.targetMeasurements = { ...progressRecord.goals.targetMeasurements, ...targetMeasurements };
+    if (targetWeight !== undefined)
+      progressRecord.goals.targetWeight = targetWeight;
+    if (targetBodyFat !== undefined)
+      progressRecord.goals.targetBodyFat = targetBodyFat;
+    if (targetMeasurements)
+      progressRecord.goals.targetMeasurements = {
+        ...progressRecord.goals.targetMeasurements,
+        ...targetMeasurements,
+      };
     if (deadline) progressRecord.goals.deadline = deadline;
-    if (description !== undefined) progressRecord.goals.description = description;
-    if (weeklyTarget !== undefined) progressRecord.goals.weeklyTarget = weeklyTarget;
+    if (description !== undefined)
+      progressRecord.goals.description = description;
+    if (weeklyTarget !== undefined)
+      progressRecord.goals.weeklyTarget = weeklyTarget;
     if (programType) progressRecord.programType = programType;
     if (medicalCondition) progressRecord.medicalCondition = medicalCondition;
 
@@ -2190,7 +2612,7 @@ exports.getProgressAnalytics = async (req, res) => {
     startDate.setMonth(startDate.getMonth() - months);
 
     const filteredEntries = progressRecord.progressData.filter(
-      (entry) => entry.date >= startDate
+      (entry) => entry.date >= startDate,
     );
 
     // Calculate trends
@@ -2199,13 +2621,14 @@ exports.getProgressAnalytics = async (req, res) => {
     const adherenceScores = [];
 
     filteredEntries.forEach((entry) => {
-      if (entry.weight) weightTrend.push({ date: entry.date, weight: entry.weight });
-      if (entry.bodyFat) bodyFatTrend.push({ date: entry.date, bodyFat: entry.bodyFat });
+      if (entry.weight)
+        weightTrend.push({ date: entry.date, weight: entry.weight });
+      if (entry.bodyFat)
+        bodyFatTrend.push({ date: entry.date, bodyFat: entry.bodyFat });
       if (entry.overallScore !== undefined) {
         adherenceScores.push({ date: entry.date, score: entry.overallScore });
       }
     });
-
     // Calculate avg weekly change
     const weeklyChanges = [];
     for (let i = 1; i < filteredEntries.length; i++) {
@@ -2216,8 +2639,9 @@ exports.getProgressAnalytics = async (req, res) => {
       }
     }
 
-    const avgWeeklyChange = weeklyChanges.length > 0
-      ? weeklyChanges.reduce((a, b) => a + b, 0) / weeklyChanges.length
+    const avgWeeklyChange =
+      weeklyChanges.length > 0 ?
+        weeklyChanges.reduce((a, b) => a + b, 0) / weeklyChanges.length
       : 0;
 
     res.status(200).json({
@@ -2236,7 +2660,8 @@ exports.getProgressAnalytics = async (req, res) => {
         goals: progressRecord.goals,
         status: progressRecord.status,
         lastReviewed: progressRecord.lastReviewed,
-        unreadAlerts: progressRecord.alerts.filter(a => !a.acknowledged).length,
+        unreadAlerts: progressRecord.alerts.filter((a) => !a.acknowledged)
+          .length,
       },
     });
   } catch (error) {
@@ -2321,14 +2746,16 @@ exports.getProgressSummary = async (req, res) => {
       programType: record.programType,
       progress: record.calculateWeightProgress(),
       startDate: record.startDate,
-      lastEntry: record.progressData.length > 0
-        ? record.progressData[record.progressData.length - 1].date
+      lastEntry:
+        record.progressData.length > 0 ?
+          record.progressData[record.progressData.length - 1].date
         : null,
       status: record.status,
       nextFollowUp: record.nextFollowUp,
-      unreadAlerts: record.alerts.filter(a => !a.acknowledged).length,
-      recentNote: record.doctorNotes.length > 0
-        ? record.doctorNotes[record.doctorNotes.length - 1]
+      unreadAlerts: record.alerts.filter((a) => !a.acknowledged).length,
+      recentNote:
+        record.doctorNotes.length > 0 ?
+          record.doctorNotes[record.doctorNotes.length - 1]
         : null,
     }));
 
@@ -2339,6 +2766,417 @@ exports.getProgressSummary = async (req, res) => {
     });
   } catch (error) {
     console.error("Get progress summary error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// ==================== DOCTOR CHAT ====================
+
+// @desc    Send message to patient
+// @route   POST /api/doctor/chat/:patientId
+// @access  Private (Doctor only)
+exports.sendMessageToPatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { message } = req.body;
+    const doctorId = req.user._id;
+
+    if (!message || message.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Message content is required",
+      });
+    }
+
+    const patient = await User.findById(patientId);
+    if (!patient || patient.role !== "user") {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: patientId,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to message this patient",
+      });
+    }
+
+    const msg = await Message.create({
+      sender: doctorId,
+      receiverId: patientId,
+      message: message.trim(),
+      seen: false,
+    });
+
+    const populatedMessage = await msg.populate(
+      "sender",
+      "name email profilePicture",
+    );
+
+    getIO().to(patientId.toString()).emit("receiveMessage", populatedMessage);
+
+    res.status(201).json({
+      success: true,
+      message: "Message sent successfully",
+      data: populatedMessage,
+    });
+  } catch (error) {
+    console.error("Send message error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Get conversation with a patient
+// @route   GET /api/doctor/chat/:patientId
+// @access  Private (Doctor only)
+exports.getPatientConversation = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const doctorId = req.user._id;
+
+    const isAssociated = await Appointment.findOne({
+      doctorId,
+      userId: patientId,
+    });
+
+    if (!isAssociated) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view this conversation",
+      });
+    }
+
+    const messages = await Message.find({
+      $or: [
+        { sender: doctorId, receiverId: patientId },
+        { sender: patientId, receiverId: doctorId },
+      ],
+    })
+      .populate("sender", "name email profilePicture")
+      .sort("createdAt");
+
+    res.status(200).json({
+      success: true,
+      data: messages,
+    });
+  } catch (error) {
+    console.error("Get conversation error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Get all patient conversations (with last message and unread count)
+// @route   GET /api/doctor/chat/conversations
+// @access  Private (Doctor only)
+exports.getAllConversations = async (req, res) => {
+  try {
+    const doctorId = req.user._id;
+
+    const patientIds = await getDoctorPatients(doctorId);
+
+    if (patientIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const conversations = await Promise.all(
+      patientIds.map(async (patientId) => {
+        const lastMessage = await Message.findOne({
+          $or: [
+            { sender: doctorId, receiverId: patientId },
+            { sender: patientId, receiverId: doctorId },
+          ],
+        })
+          .populate("sender", "name profilePicture")
+          .sort({ createdAt: -1 });
+
+        const unreadCount = await Message.countDocuments({
+          sender: patientId,
+          receiverId: doctorId,
+          seen: false,
+        });
+
+        const patient = await User.findById(patientId).select(
+          "name email profilePicture",
+        );
+
+        return {
+          patientId,
+          patient,
+          lastMessage,
+          unreadCount,
+        };
+      }),
+    );
+
+    const filtered = conversations.filter((c) => c.lastMessage);
+
+    filtered.sort((a, b) => b.lastMessage.createdAt - a.lastMessage.createdAt);
+
+    res.status(200).json({
+      success: true,
+      data: filtered,
+    });
+  } catch (error) {
+    console.error("Get conversations error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Mark messages from patient as seen
+// @route   PATCH /api/doctor/chat/:patientId/seen
+// @access  Private (Doctor only)
+exports.markMessagesAsSeen = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const doctorId = req.user._id;
+
+    const result = await Message.updateMany(
+      {
+        sender: patientId,
+        receiverId: doctorId,
+        seen: false,
+      },
+      { seen: true },
+    );
+
+    getIO().to(patientId.toString()).emit("messagesSeen", { userId: doctorId });
+
+    res.status(200).json({
+      success: true,
+      message: "Messages marked as seen",
+      data: { modifiedCount: result.modifiedCount },
+    });
+  } catch (error) {
+    console.error("Mark as seen error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @desc    Create doctor schedule entry
+// @route   POST /api/doctor/schedule
+// @access  Private (Doctor only)
+exports.createSchedule = async (req, res) => {
+  try {
+    const doctorId = req.user._id;
+    const {
+      date,
+      startTime,
+      endTime,
+      breakStart,
+      breakEnd,
+      maxAppointments,
+      notes,
+    } = req.body;
+
+    // Check for overlapping schedule on the same date
+    const existingSchedule = await DoctorSchedule.findOne({
+      doctorId,
+      date: {
+        $gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
+        $lte: new Date(new Date(date).setHours(23, 59, 59, 999)),
+      },
+    });
+
+    if (existingSchedule) {
+      return res.status(400).json({
+        success: false,
+        message: "A schedule for this date already exists. Use PUT to update.",
+      });
+    }
+
+    const schedule = await DoctorSchedule.create({
+      doctorId,
+      date,
+      startTime,
+      endTime,
+      breakStart,
+      breakEnd,
+      maxAppointments,
+      notes,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Schedule created successfully",
+      data: schedule,
+    });
+  } catch (error) {
+    console.error("Create schedule error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @route   GET /api/doctor/schedule
+// @access  Private (Doctor only)
+exports.getSchedule = async (req, res) => {
+  try {
+    const doctorId = req.user._id;
+    const { startDate, endDate } = req.query;
+
+    const filter = { doctorId };
+
+    if (startDate && endDate) {
+      filter.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    } else {
+      // Default to next 30 days
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+
+      filter.date = { $gte: start, $lte: end };
+    }
+
+    const schedules = await DoctorSchedule.find(filter)
+      .sort({ date: 1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: schedules.length,
+      data: schedules,
+    });
+  } catch (error) {
+    console.error("Get schedule error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @route   PUT /api/doctor/schedule/:id
+// @access  Private (Doctor only)
+exports.updateSchedule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+    const {
+      date,
+      startTime,
+      endTime,
+      breakStart,
+      breakEnd,
+      maxAppointments,
+      notes,
+    } = req.body;
+
+    const schedule = await DoctorSchedule.findOne({ _id: id, doctorId });
+
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: "Schedule not found",
+      });
+    }
+
+    // Check for overlapping schedule on the new date (excluding current schedule)
+    if (
+      date &&
+      new Date(date).toDateString() !== new Date(schedule.date).toDateString()
+    ) {
+      const overlappingSchedule = await DoctorSchedule.findOne({
+        doctorId,
+        date: {
+          $gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
+          $lte: new Date(new Date(date).setHours(23, 59, 59, 999)),
+        },
+        _id: { $ne: id },
+      });
+
+      if (overlappingSchedule) {
+        return res.status(400).json({
+          success: false,
+          message: "A schedule for this date already exists.",
+        });
+      }
+    }
+
+    const updatedSchedule = await DoctorSchedule.findOneAndUpdate(
+      { _id: id, doctorId },
+      {
+        date,
+        startTime,
+        endTime,
+        breakStart,
+        breakEnd,
+        maxAppointments,
+        notes,
+        updatedAt: Date.now(),
+      },
+      { new: true, runValidators: true },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Schedule updated successfully",
+      data: updatedSchedule,
+    });
+  } catch (error) {
+    console.error("Update schedule error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// @route   DELETE /api/doctor/schedule/:id
+// @access  Private (Doctor only)
+exports.deleteSchedule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doctorId = req.user._id;
+
+    const schedule = await DoctorSchedule.findOneAndDelete({
+      _id: id,
+      doctorId,
+    });
+
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: "Schedule not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Schedule deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete schedule error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",

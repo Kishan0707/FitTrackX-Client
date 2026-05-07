@@ -226,6 +226,24 @@ router.get(
   authorizeRoles(ROLES.DOCTOR),
   doctorController.getSchedule,
 );
+router.post(
+  "/schedule",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.createSchedule,
+);
+router.put(
+  "/schedule/:id",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.updateSchedule,
+);
+router.delete(
+  "/schedule/:id",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.deleteSchedule,
+);
 
 // Earnings & Settings
 router.get(
@@ -265,6 +283,41 @@ router.put(
   protect,
   authorizeRoles(ROLES.DOCTOR),
   doctorController.updateProfile,
+);
+
+
+// ==================== DOCTOR CHAT ROUTES ====================
+
+// Send message to patient
+router.post(
+  "/chat/:patientId",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.sendMessageToPatient,
+);
+
+// Get conversation with a specific patient
+router.get(
+  "/chat/:patientId",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.getPatientConversation,
+);
+
+// Get all patient conversations (with last message and unread count)
+router.get(
+  "/chat/conversations",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.getAllConversations,
+);
+
+// Mark messages from patient as seen
+router.patch(
+  "/chat/:patientId/seen",
+  protect,
+  authorizeRoles(ROLES.DOCTOR),
+  doctorController.markMessagesAsSeen,
 );
 
 module.exports = router;
