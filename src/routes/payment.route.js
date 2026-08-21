@@ -18,6 +18,12 @@ router.post(
   authorizeRoles(...ALL_ROLES),
   paymentController.createPlanCheckout,
 );
+router.post(
+  "/role-checkout",
+  protect,
+  authorizeRoles(...ALL_ROLES),
+  paymentController.createRoleCheckout,
+);
 router.get(
   "/confirm",
   protect,

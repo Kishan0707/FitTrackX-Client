@@ -5,6 +5,7 @@ const { Order } = require("../models/order.model");
 const { Plan } = require("../models/plan.model");
 const Subscription = require("../models/subscription.model");
 const PaymentEvent = require("../models/paymentEvent.model");
+const User = require("../models/user.model");
 const mongoose = require("mongoose");
 const { ROLES, ALL_ROLES } = require("../constants/roles");
 const normalizeJsonBody = (body) => {
@@ -332,13 +333,21 @@ exports.stripeWebhook = async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    const { type, role } = session.metadata;
+    const { type, role, userId } = session.metadata;
 
     if (type === "role") {
       console.log("✅ Role payment success:", role);
 
-      // future:
-      // save payment record / temp session
+      if (role === ROLES.COACH && userId) {
+        try {
+          await User.findByIdAndUpdate(userId, {
+            subscription: "paid",
+          });
+          console.log(`✅ Coach subscription activated for user ${userId}`);
+        } catch (err) {
+          console.error("Failed to update coach subscription:", err);
+        }
+      }
     }
   }
   res.status(200).json({ received: true });
@@ -467,6 +476,7 @@ exports.createRoleCheckout = async (req, res) => {
     let price = 0;
     if (role === ROLES.USER) price = 1999;
     else if (role === ROLES.SELLER || role === ROLES.AFFILIATE) price = 199;
+    else if (role === ROLES.COACH) price = 1999;
     else return res.status(400).json({ message: "Invalid role" });
 
     const session = await stripe.checkout.sessions.create({
@@ -488,10 +498,11 @@ exports.createRoleCheckout = async (req, res) => {
       metadata: {
         type: "role",
         role,
+        userId: req.user?._id?.toString(),
       },
 
-      success_url: `${process.env.CLIENT_URL}/success?type=plan&role=${role}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/cancel`,
+      success_url: `${process.env.CLIENT_URL}/success?type=role&role=${role}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/cancel?role=${role}`,
     });
     res.json({ url: session.url });
   } catch (err) {
